@@ -155,11 +155,33 @@ Tuning:
 .venv/bin/python scripts/triage_person.py --min-confidence 0.6 --sample-interval-ms 500 --min-hits 3
 ```
 
+### Do do chinh xac
+
+```bash
+make fetch-eval-videos    # tai video public domain co nguoi that
+make eval-person          # tinh precision/recall
+```
+
+Tap eval: `data/eval/person-detection/expected.json`. Nhan do nguoi xem frame xac nhan, khong phai do tool sinh. Video khong commit, nhan thi commit.
+
+Ket qua lan chay gan nhat (10 video, mac dinh `min_confidence=0.5`, `min_hits=2`):
+
+| Metric | Value |
+|---|---|
+| precision | 0.86 |
+| recall | 1.00 |
+| f1 | 0.92 |
+| confusion | TP=6 FP=1 TN=3 FN=0 |
+
+Nhan dung ca 6 video co nguoi that, ke ca ca kho: nguoi chi xuat hien vai giay, nguoi trong nha may thieu sang va bi che mot phan. Sai duy nhat: video sua bien bi nhan nham la nguoi (0.99).
+
+Output: `outputs/reports/person-detector-eval.json`, co ca danh sach video bi sai.
+
 ### Gioi han (quan trong)
 
 Day la tin hieu **triage**, khong phai ground truth. Script khong bao gio ghi `event_label` hay `ground_truth_status` - xem ADR-005.
 
-Do chinh xac **chua duoc do**: chua co tap video co nhan de tinh precision/recall. Tren bo video mau hien tai detector cho false positive confidence cao voi vat the khong phai nguoi (video sua bien: 0.99). Truoc khi tin ket qua tren du lieu that, phai co tap ground truth de do.
+Tap eval chi co 10 video va **khong phai footage CCTV vanh dai**. So lieu tren chi chung minh detector nhan duoc nguoi that trong canh thong thuong. No khong du de ket luan cho camera an ninh that: goc cao, nguoi o xa, ban dem, hong ngoai deu chua duoc thu. Phai do lai tren footage that cua du an truoc khi tin.
 
 ## Validation
 

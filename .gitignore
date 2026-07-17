@@ -31,3 +31,6 @@ outputs/runs/
 
 # Detector weights, downloaded via make fetch-person-model
 models/
+
+# Eval videos are downloaded, labels are committed
+data/eval/**/*.mp4
