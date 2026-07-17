@@ -60,6 +60,66 @@ CATALOG: list[dict[str, str]] = [
         "license": "CC-BY 3.0 (Blender Foundation)",
         "scene": "animation, cut-heavy",
     },
+    {
+        "name": "bunny-trailer.mp4",
+        "url": "https://media.w3.org/2010/05/bunny/trailer.mp4",
+        "license": "CC-BY 3.0 (Blender Foundation)",
+        "scene": "animation, cut-heavy",
+    },
+    {
+        "name": "movie-300.mp4",
+        "url": "https://media.w3.org/2010/05/video/movie_300.mp4",
+        "license": "W3C test media",
+        "scene": "live-action, short",
+    },
+    {
+        "name": "bbb-720p-2mb.mp4",
+        "url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4",
+        "license": "CC-BY 3.0 (Blender Foundation)",
+        "scene": "animation, 720p",
+    },
+    {
+        "name": "bbb-720p-5mb.mp4",
+        "url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_5MB.mp4",
+        "license": "CC-BY 3.0 (Blender Foundation)",
+        "scene": "animation, 720p higher bitrate",
+    },
+    {
+        "name": "jellyfish-720p-1mb.mp4",
+        "url": "https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4",
+        "license": "test-videos.co.uk sample",
+        "scene": "static camera, slow motion subject",
+    },
+    {
+        "name": "jellyfish-720p-2mb.mp4",
+        "url": "https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_2MB.mp4",
+        "license": "test-videos.co.uk sample",
+        "scene": "static camera, slow motion subject",
+    },
+    {
+        "name": "sintel-720p-1mb.mp4",
+        "url": "https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4",
+        "license": "CC-BY 3.0 (Blender Foundation)",
+        "scene": "animation, 720p",
+    },
+    {
+        "name": "bbb-720p-surround.mp4",
+        "url": "https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4",
+        "license": "CC-BY 3.0 (Blender Foundation)",
+        "scene": "animation, long form (~10 min)",
+    },
+    {
+        "name": "ocean.mp4",
+        "url": "https://filesamples.com/samples/video/mp4/sample_960x400_ocean_with_audio.mp4",
+        "license": "filesamples free sample",
+        "scene": "live-action, static camera",
+    },
+    {
+        "name": "learning-sample.mp4",
+        "url": "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4",
+        "license": "learningcontainer free sample",
+        "scene": "live-action, mixed cuts",
+    },
 ]
 
 

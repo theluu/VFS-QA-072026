@@ -14,7 +14,9 @@ dependencies = [
   "python-multipart>=0.0.9",
   "python-dotenv>=1.0",
   "jsonschema>=4.22",
-  "openai>=1.40"
+  "openai>=1.40",
+  # <5 is required: OpenCV 5 dropped the Caffe importer the detector relies on.
+  "opencv-python-headless>=4.10,<5"
 ]
 
 [project.optional-dependencies]

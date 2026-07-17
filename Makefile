@@ -14,8 +14,9 @@ API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
 API_BASE ?= http://$(API_HOST):$(API_PORT)
 FRONTEND_PORT ?= 5173
+TRIAGE_INPUT ?= data/raw/catalog.json
 
-.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool app frontend-build fetch-videos mine-all validate-dataset coverage-report release
+.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool app frontend-build fetch-videos mine-all fetch-person-model triage-person validate-dataset coverage-report release
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -56,6 +57,12 @@ fetch-videos:
 
 mine-all:
 	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/mine_all.py
+
+fetch-person-model:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/fetch_person_model.py
+
+triage-person:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/triage_person.py --input $(TRIAGE_INPUT)
 
 validate-dataset:
 	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/validate_dataset.py --manifest $(MANIFEST) --annotations $(ANNOTATIONS)

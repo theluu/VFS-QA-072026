@@ -124,6 +124,43 @@ outputs/runs/street-30s/candidate-manifest.json
 
 Luu y: bo video mau la canh ngoai troi/animation cong khai, dung de kiem tra pipeline chay dung. Day khong phai footage CCTV vanh dai that va khong thay the du lieu test dai dien cho use case.
 
+## Person Triage (Buoc 1)
+
+Loc video tho: video nao co nguoi, video nao bi loai.
+
+```bash
+make fetch-person-model                      # tai detector, 1 lan
+make triage-person                           # input mac dinh: data/raw/catalog.json
+make triage-person TRIAGE_INPUT=data/raw     # hoac mot thu muc video
+```
+
+Output: `outputs/reports/triage-report.json`
+
+```json
+{
+  "summary": {"total": 16, "kept": 7, "rejected": 9},
+  "videos": [
+    {"video_path": "data/raw/x.mp4", "has_person": true, "max_confidence": 0.91,
+     "person_timestamps_ms": [3000, 6000], "decision": "keep"}
+  ],
+  "rejected": ["data/raw/ocean.mp4"]
+}
+```
+
+Detector la MobileNet-SSD chay qua OpenCV DNN. Chon model nay vi license permissive; ultralytics YOLO la AGPL-3.0 nen khong dung cho ban thuong mai.
+
+Tuning:
+
+```bash
+.venv/bin/python scripts/triage_person.py --min-confidence 0.6 --sample-interval-ms 500 --min-hits 3
+```
+
+### Gioi han (quan trong)
+
+Day la tin hieu **triage**, khong phai ground truth. Script khong bao gio ghi `event_label` hay `ground_truth_status` - xem ADR-005.
+
+Do chinh xac **chua duoc do**: chua co tap video co nhan de tinh precision/recall. Tren bo video mau hien tai detector cho false positive confidence cao voi vat the khong phai nguoi (video sua bien: 0.99). Truoc khi tin ket qua tren du lieu that, phai co tap ground truth de do.
+
 ## Validation
 
 ```bash
