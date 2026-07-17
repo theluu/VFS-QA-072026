@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "sample-dataset",
+  "annotation_batch_id": "invalid-label",
+  "exported_at": "2026-07-17T00:10:00Z",
+  "annotations": [
+    {
+      "sample_id": "samplevideo01__15000__82000__intrusion_manual_v1",
+      "event_label": "not_a_known_label",
+      "event_start_ms": 0,
+      "event_end_ms": 1000,
+      "ground_truth_status": "confirmed",
+      "reviewer": "sample_reviewer",
+      "reviewed_at": "2026-07-17T00:05:00Z",
+      "comment": "Should be rejected as invalid label.",
+      "annotation_version": 1
+    }
+  ]
+}

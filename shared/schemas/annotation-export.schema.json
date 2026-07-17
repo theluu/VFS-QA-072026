@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vsf.local/schemas/annotation-export.schema.json",
+  "title": "Annotation Export",
+  "version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "annotation_batch_id",
+    "exported_at",
+    "annotations"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "annotation_batch_id": {"type": "string", "minLength": 1},
+    "exported_at": {"type": "string", "format": "date-time"},
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sample_id",
+          "event_label",
+          "event_start_ms",
+          "event_end_ms",
+          "ground_truth_status",
+          "reviewer",
+          "reviewed_at",
+          "comment",
+          "annotation_version"
+        ],
+        "properties": {
+          "sample_id": {"type": "string", "minLength": 1},
+          "event_label": {"type": "string", "minLength": 1},
+          "event_start_ms": {"type": "integer", "minimum": 0},
+          "event_end_ms": {"type": "integer", "minimum": 1},
+          "ground_truth_status": {
+            "type": "string",
+            "enum": ["unreviewed", "confirmed", "rejected", "needs_review"]
+          },
+          "reviewer": {"type": "string"},
+          "reviewed_at": {"type": "string", "format": "date-time"},
+          "comment": {"type": "string"},
+          "annotation_version": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

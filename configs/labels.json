@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "event_labels": [
+    {"value": "intrusion_loitering", "label": "Loitering near fence"},
+    {"value": "intrusion_approach", "label": "Approach or touch fence"},
+    {"value": "intrusion_crossing", "label": "Climb or cross restricted boundary"},
+    {"value": "camera_cover", "label": "Camera cover or occlusion"},
+    {"value": "camera_movement", "label": "Camera shake or rotation"},
+    {"value": "background", "label": "No event / background"},
+    {"value": "ambiguous", "label": "Ambiguous"},
+    {"value": "invalid", "label": "Invalid sample"}
+  ],
+  "ground_truth_statuses": [
+    "unreviewed",
+    "confirmed",
+    "rejected",
+    "needs_review"
+  ],
+  "default_reviewer": "",
+  "candidate_rule_version": "candidate_rule_v1",
+  "clip_padding_ms": 30000
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "sample-dataset",
+  "manifest_id": "invalid-duplicate",
+  "generated_at": "2026-07-17T00:00:00Z",
+  "generator_version": "candidate-mining-poc-0.1.0",
+  "random_seed": 42,
+  "samples": [
+    {
+      "sample_id": "dup",
+      "source_video_id": "samplevideo01",
+      "source_video_path": "data/raw/sample.mp4",
+      "source_video_duration_ms": 10000,
+      "clip_path": "outputs/clips/a.mp4",
+      "clip_type": "event",
+      "candidate_rule": "manual_v1",
+      "start_ms": 0,
+      "end_ms": 1000,
+      "duration_ms": 1000,
+      "metadata": {}
+    },
+    {
+      "sample_id": "dup",
+      "source_video_id": "samplevideo01",
+      "source_video_path": "data/raw/sample.mp4",
+      "source_video_duration_ms": 10000,
+      "clip_path": "outputs/clips/b.mp4",
+      "clip_type": "background",
+      "candidate_rule": "background_v1",
+      "start_ms": 2000,
+      "end_ms": 3000,
+      "duration_ms": 1000,
+      "metadata": {}
+    }
+  ]
+}

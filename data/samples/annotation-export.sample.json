@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "sample-dataset",
+  "annotation_batch_id": "sample-annotation-batch-001",
+  "exported_at": "2026-07-17T00:10:00Z",
+  "annotations": [
+    {
+      "sample_id": "samplevideo01__15000__82000__intrusion_manual_v1",
+      "event_label": "intrusion_crossing",
+      "event_start_ms": 45500,
+      "event_end_ms": 52000,
+      "ground_truth_status": "confirmed",
+      "reviewer": "sample_reviewer",
+      "reviewed_at": "2026-07-17T00:05:00Z",
+      "comment": "Sample annotation for schema validation.",
+      "annotation_version": 1
+    },
+    {
+      "sample_id": "samplevideo01__90000__105000__background_v1",
+      "event_label": "background",
+      "event_start_ms": 90000,
+      "event_end_ms": 105000,
+      "ground_truth_status": "rejected",
+      "reviewer": "sample_reviewer",
+      "reviewed_at": "2026-07-17T00:06:00Z",
+      "comment": "No relevant event in the background sample.",
+      "annotation_version": 1
+    }
+  ]
+}

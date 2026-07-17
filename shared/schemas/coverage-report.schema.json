@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vsf.local/schemas/coverage-report.schema.json",
+  "title": "Coverage Report",
+  "version": "1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "report_id",
+    "generated_at",
+    "summary",
+    "by_event_label",
+    "by_source_video"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "report_id": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_videos",
+        "total_duration_ms",
+        "total_candidate_samples",
+        "event_samples",
+        "background_samples",
+        "reviewed_samples",
+        "unreviewed_samples",
+        "confirmed_samples",
+        "rejected_samples",
+        "needs_review_samples",
+        "annotation_completion_rate",
+        "confirmed_rate",
+        "valid_artifact_rate"
+      ],
+      "properties": {
+        "total_videos": {"type": "integer", "minimum": 0},
+        "total_duration_ms": {"type": "integer", "minimum": 0},
+        "total_candidate_samples": {"type": "integer", "minimum": 0},
+        "event_samples": {"type": "integer", "minimum": 0},
+        "background_samples": {"type": "integer", "minimum": 0},
+        "reviewed_samples": {"type": "integer", "minimum": 0},
+        "unreviewed_samples": {"type": "integer", "minimum": 0},
+        "confirmed_samples": {"type": "integer", "minimum": 0},
+        "rejected_samples": {"type": "integer", "minimum": 0},
+        "needs_review_samples": {"type": "integer", "minimum": 0},
+        "annotation_completion_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "confirmed_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "valid_artifact_rate": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "by_event_label": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "by_source_video": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["samples", "duration_ms"],
+        "properties": {
+          "samples": {"type": "integer", "minimum": 0},
+          "duration_ms": {"type": "integer", "minimum": 0}
+        }
+      }
+    }
+  }
+}

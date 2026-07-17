@@ -1,0 +1,27 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+node_modules/
+dist/
+build/
+
+# Sensitive or generated data
+data/raw/
+data/interim/
+data/processed/
+outputs/inventories/
+outputs/manifests/
+outputs/clips/
+outputs/annotations/
+outputs/reports/
+outputs/releases/
+outputs/runs/
+
+# Keep directory docs via README/.gitkeep only if needed.
+!.gitkeep

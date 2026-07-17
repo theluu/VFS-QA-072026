@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "sample-dataset",
+  "manifest_id": "invalid-timestamp",
+  "generated_at": "2026-07-17T00:00:00Z",
+  "generator_version": "candidate-mining-poc-0.1.0",
+  "random_seed": 42,
+  "samples": [
+    {
+      "sample_id": "samplevideo01__9000__20000__manual_v1",
+      "source_video_id": "samplevideo01",
+      "source_video_path": "data/raw/sample.mp4",
+      "source_video_duration_ms": 10000,
+      "clip_path": "outputs/clips/a.mp4",
+      "clip_type": "event",
+      "candidate_rule": "manual_v1",
+      "start_ms": 9000,
+      "end_ms": 20000,
+      "duration_ms": 11000,
+      "metadata": {}
+    }
+  ]
+}

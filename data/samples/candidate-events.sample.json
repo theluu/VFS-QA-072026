@@ -1,0 +1,13 @@
+{
+  "events": [
+    {
+      "candidate_rule": "intrusion_manual_v1",
+      "candidate_start_ms": 45000,
+      "candidate_end_ms": 52000,
+      "metadata": {
+        "source": "sample_fixture",
+        "note": "Manual candidate timestamp for documentation"
+      }
+    }
+  ]
+}

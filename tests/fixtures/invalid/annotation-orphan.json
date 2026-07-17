@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "sample-dataset",
+  "annotation_batch_id": "invalid-orphan",
+  "exported_at": "2026-07-17T00:10:00Z",
+  "annotations": [
+    {
+      "sample_id": "missing-sample",
+      "event_label": "intrusion_crossing",
+      "event_start_ms": 0,
+      "event_end_ms": 1000,
+      "ground_truth_status": "confirmed",
+      "reviewer": "sample_reviewer",
+      "reviewed_at": "2026-07-17T00:05:00Z",
+      "comment": "Should be rejected as orphan.",
+      "annotation_version": 1
+    }
+  ]
+}

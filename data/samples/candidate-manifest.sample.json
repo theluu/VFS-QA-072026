@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "dataset_id": "sample-dataset",
+  "manifest_id": "sample-manifest-001",
+  "generated_at": "2026-07-17T00:00:00Z",
+  "generator_version": "candidate-mining-poc-0.1.0",
+  "random_seed": 42,
+  "samples": [
+    {
+      "sample_id": "samplevideo01__15000__82000__intrusion_manual_v1",
+      "source_video_id": "samplevideo01",
+      "source_video_path": "data/raw/sample.mp4",
+      "source_video_duration_ms": 120000,
+      "clip_path": "outputs/clips/samplevideo01__15000__82000__intrusion_manual_v1.mp4",
+      "clip_type": "event",
+      "candidate_rule": "intrusion_manual_v1",
+      "start_ms": 15000,
+      "end_ms": 82000,
+      "duration_ms": 67000,
+      "metadata": {
+        "candidate_start_ms": 45000,
+        "candidate_end_ms": 52000,
+        "selection_source": "sample_fixture"
+      }
+    },
+    {
+      "sample_id": "samplevideo01__90000__105000__background_v1",
+      "source_video_id": "samplevideo01",
+      "source_video_path": "data/raw/sample.mp4",
+      "source_video_duration_ms": 120000,
+      "clip_path": "outputs/clips/samplevideo01__90000__105000__background_v1.mp4",
+      "clip_type": "background",
+      "candidate_rule": "background_v1",
+      "start_ms": 90000,
+      "end_ms": 105000,
+      "duration_ms": 15000,
+      "metadata": {
+        "selection_source": "random_background",
+        "random_seed": 42
+      }
+    }
+  ]
+}

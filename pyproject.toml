@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vsf-ai-camera-poc"
+version = "0.1.0"
+description = "Candidate mining and annotation POC for AI Camera test data preparation"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "pydantic>=2.6",
+  "python-multipart>=0.0.9",
+  "jsonschema>=4.22",
+  "openai>=1.40"
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools]
+packages = ["candidate_mining", "annotation_api"]
+
+[tool.setuptools.package-dir]
+candidate_mining = "apps/candidate-mining/src/candidate_mining"
+annotation_api = "apps/annotation-tool/backend/src/annotation_api"
