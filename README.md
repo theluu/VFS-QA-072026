@@ -40,6 +40,17 @@ make setup
 
 Neu chi muon chay validation/test khong can server, dependency ngoai FastAPI/React khong bat buoc vi test hien tai dung standard library.
 
+## OpenAI Key
+
+Dien key local vao `.env`:
+
+```bash
+OPENAI_API_KEY=your_key_here
+OPENAI_MODEL=your_model_here
+```
+
+`.env` khong duoc commit. File mau co san tai `.env.example`.
+
 ## Candidate Mining
 
 ```bash

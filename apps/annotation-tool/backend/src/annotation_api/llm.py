@@ -1,7 +1,22 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
+
+from scripts.validation_core import REPO_ROOT
+
+
+def load_local_env() -> None:
+    env_path = Path(REPO_ROOT) / ".env"
+    if env_path.exists():
+        try:
+            from dotenv import load_dotenv
+
+            load_dotenv(env_path, override=True)
+        except Exception:
+            # The LLM helper must degrade to deterministic fallback if dotenv is unavailable.
+            pass
 
 
 def deterministic_review_note(sample: dict[str, Any], annotation: dict[str, Any] | None = None) -> str:
@@ -18,6 +33,7 @@ def deterministic_review_note(sample: dict[str, Any], annotation: dict[str, Any]
 
 
 def draft_review_note(sample: dict[str, Any], annotation: dict[str, Any] | None = None) -> dict[str, Any]:
+    load_local_env()
     api_key = os.environ.get("OPENAI_API_KEY")
     model = os.environ.get("OPENAI_MODEL")
     fallback = deterministic_review_note(sample, annotation)
