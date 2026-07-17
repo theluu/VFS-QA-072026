@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from scripts.validation_core import REPO_ROOT
 
@@ -53,6 +54,24 @@ def get_manifest(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"path": path, "manifest": manifest}
+
+
+@app.get("/manifests")
+def list_manifests() -> dict[str, Any]:
+    """Manifests the UI can open, mined runs first.
+
+    The sample fixture is listed last and only as a fallback: its clips are not
+    real files, so opening it first would show an empty player.
+    """
+    runs_dir = REPO_ROOT / "outputs" / "runs"
+    paths = [
+        str(candidate.relative_to(REPO_ROOT))
+        for candidate in sorted(runs_dir.glob("*/candidate-manifest.json"))
+    ]
+    sample = REPO_ROOT / "data" / "samples" / "candidate-manifest.sample.json"
+    if sample.exists():
+        paths.append(str(sample.relative_to(REPO_ROOT)))
+    return {"manifests": paths}
 
 
 @app.post("/manifest/validate")
@@ -107,3 +126,11 @@ async def post_llm_review_note(request: Request) -> dict[str, Any]:
 @app.get("/repo")
 def repo_info() -> dict[str, str]:
     return {"root": REPO_ROOT.name}
+
+
+# Mounted last so every API route above wins the match; StaticFiles only
+# receives paths that no API route claimed.
+FRONTEND_DIST = REPO_ROOT / "apps" / "annotation-tool" / "frontend" / "dist"
+
+if FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")

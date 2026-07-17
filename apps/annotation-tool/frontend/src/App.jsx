@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const DEFAULT_MANIFEST = "data/samples/candidate-manifest.sample.json";
 
 function nowIso() {
@@ -124,11 +124,23 @@ export default function App() {
     []
   );
 
+  const resolveDefaultManifest = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/manifests`);
+      if (!response.ok) return DEFAULT_MANIFEST;
+      const payload = await response.json();
+      return payload.manifests?.[0] || DEFAULT_MANIFEST;
+    } catch {
+      return DEFAULT_MANIFEST;
+    }
+  }, []);
+
   useEffect(() => {
     loadConfig()
-      .then(() => loadManifest(DEFAULT_MANIFEST))
+      .then(resolveDefaultManifest)
+      .then((path) => loadManifest(path))
       .catch((exc) => setError(exc.message));
-  }, [loadConfig, loadManifest]);
+  }, [loadConfig, loadManifest, resolveDefaultManifest]);
 
   useEffect(() => {
     if (!current || !config) {

@@ -66,26 +66,63 @@ Output chinh:
 
 ## Annotation Tool
 
-Backend:
+### Chay 1 link (khuyen nghi cho demo/test)
+
+```bash
+make app
+```
+
+Target nay build frontend roi cho FastAPI serve luon UI tinh tai `/`. Chi can mo mot link duy nhat:
+
+```text
+http://127.0.0.1:8000
+```
+
+UI va API cung origin nen khong can CORS va khong can chay hai process. Doi port:
+
+```bash
+make app API_PORT=8020
+```
+
+Khi mo, UI goi `GET /manifests` va tu load run dau tien co trong `outputs/runs/`. Neu chua co run nao thi fallback ve manifest sample. Van co the go duong dan manifest khac vao o tren cung roi bam Load.
+
+### Che do dev (2 process, co hot-reload)
+
+Khi sua code React can hot-reload thi chay rieng backend va Vite dev server:
 
 ```bash
 make annotation-api
-```
-
-Frontend:
-
-```bash
 make annotation-tool
 ```
 
-Mac dinh UI goi API tai `http://127.0.0.1:8000`. Neu port 8000 dang ban, chay:
+Mac dinh UI goi API tai `http://127.0.0.1:8000`. Neu port 8000 dang ban:
 
 ```bash
 make annotation-api API_PORT=8020
 make annotation-tool API_PORT=8020 API_BASE=http://127.0.0.1:8020 FRONTEND_PORT=5175
 ```
 
-Trong lan setup hien tai, backend dang chay tai `http://127.0.0.1:8020` va frontend tai `http://127.0.0.1:5175`.
+## Video Test
+
+Tai bo video mau cong khai ve `data/raw/` (khong commit) va sinh file events tuong ung:
+
+```bash
+make fetch-videos
+```
+
+Chay candidate mining cho toan bo video trong catalog (tham so window duoc scale theo duration tung video):
+
+```bash
+make mine-all
+```
+
+Moi video ra mot run tai `outputs/runs/<ten-video>/`. Mo UI va tro vao manifest bat ky, vi du:
+
+```text
+outputs/runs/street-30s/candidate-manifest.json
+```
+
+Luu y: bo video mau la canh ngoai troi/animation cong khai, dung de kiem tra pipeline chay dung. Day khong phai footage CCTV vanh dai that va khong thay the du lieu test dai dien cho use case.
 
 ## Validation
 

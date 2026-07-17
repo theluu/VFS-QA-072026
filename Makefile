@@ -15,7 +15,7 @@ API_PORT ?= 8000
 API_BASE ?= http://$(API_HOST):$(API_PORT)
 FRONTEND_PORT ?= 5173
 
-.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool validate-dataset coverage-report release
+.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool app frontend-build fetch-videos mine-all validate-dataset coverage-report release
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -44,6 +44,18 @@ annotation-api:
 
 annotation-tool:
 	cd apps/annotation-tool/frontend && VITE_API_BASE=$(API_BASE) npm run dev -- --host 127.0.0.1 --port $(FRONTEND_PORT)
+
+frontend-build:
+	cd apps/annotation-tool/frontend && npm run build
+
+app: frontend-build
+	PYTHONPATH=$(PYTHONPATH) $(UVICORN) annotation_api.app:app --host $(API_HOST) --port $(API_PORT)
+
+fetch-videos:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/fetch_sample_videos.py --output data/raw
+
+mine-all:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/mine_all.py
 
 validate-dataset:
 	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/validate_dataset.py --manifest $(MANIFEST) --annotations $(ANNOTATIONS)
