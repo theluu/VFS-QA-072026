@@ -1,7 +1,8 @@
 """Triage raw videos: which contain people, which get rejected.
 
 Input:  a directory of videos, or data/raw/catalog.json
-Output: outputs/reports/triage-report.json
+Output: outputs/reports/triage-report.json, plus (with --sort-dir) the videos
+        split into co-nguoi/ and khong-co-nguoi/ folders you can just open.
 
 Triage only. A rejected video is one no human needs to review for intrusion;
 it is not a labeled sample, and this script never writes ground truth.
@@ -11,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,7 +57,11 @@ def display_path(path: str | Path) -> str:
         return str(resolved)
 
 
-def build_report(results: list[VideoPersonResult], settings: dict[str, Any]) -> dict[str, Any]:
+def build_report(
+    results: list[VideoPersonResult],
+    settings: dict[str, Any],
+    detector_name: str = "yolov4",
+) -> dict[str, Any]:
     videos = []
     for result in results:
         payload = result.to_dict()
@@ -69,7 +76,7 @@ def build_report(results: list[VideoPersonResult], settings: dict[str, Any]) -> 
     return {
         "schema_version": "1.0.0",
         "generated_at": utc_now(),
-        "detector": "mobilenet-ssd-caffe",
+        "detector": detector_name,
         "settings": settings,
         "summary": {
             "total": len(videos),
@@ -82,11 +89,47 @@ def build_report(results: list[VideoPersonResult], settings: dict[str, Any]) -> 
     }
 
 
+HAS_PERSON_DIR = "co-nguoi"
+NO_PERSON_DIR = "khong-co-nguoi"
+
+
+def sort_into_folders(report: dict[str, Any], sort_dir: Path, copy: bool) -> None:
+    """Put each video in a co-nguoi/ or khong-co-nguoi/ folder.
+
+    Symlinks by default: the corpus is gigabytes and duplicating it to view the
+    split is waste. --copy-files makes real copies for handing the folder over.
+    """
+    targets = {
+        "keep": sort_dir / HAS_PERSON_DIR,
+        "rejected": sort_dir / NO_PERSON_DIR,
+    }
+    for directory in targets.values():
+        if directory.exists():
+            shutil.rmtree(directory)
+        directory.mkdir(parents=True)
+
+    for video in report["videos"]:
+        source = (REPO_ROOT / video["video_path"]).resolve()
+        destination = targets[video["decision"]] / source.name
+        if copy:
+            shutil.copy2(source, destination)
+        else:
+            os.symlink(source, destination)
+
+    kept = len(report["kept"])
+    rejected = len(report["rejected"])
+    mode = "copy" if copy else "symlink"
+    print(f"\nSorted ({mode}) into {sort_dir.relative_to(REPO_ROOT)}/")
+    print(f"  {HAS_PERSON_DIR}/      {kept} video")
+    print(f"  {NO_PERSON_DIR}/  {rejected} video")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", default="data/raw/catalog.json", help="Video dir, file, or catalog.json")
     parser.add_argument("--output", default="outputs/reports/triage-report.json")
-    parser.add_argument("--model-dir", default="models/mobilenet-ssd")
+    parser.add_argument("--models-root", default="models")
+    parser.add_argument("--model", default="yolov4", choices=["yolov4", "mobilenet-ssd"])
     parser.add_argument("--sample-interval-ms", type=int, default=1000)
     parser.add_argument("--min-confidence", type=float, default=0.5)
     parser.add_argument(
@@ -94,6 +137,16 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=2,
         help="Frames with a person before the video is kept; guards against one false positive.",
+    )
+    parser.add_argument(
+        "--sort-dir",
+        default="",
+        help=f"Split videos into {HAS_PERSON_DIR}/ and {NO_PERSON_DIR}/ under this directory.",
+    )
+    parser.add_argument(
+        "--copy-files",
+        action="store_true",
+        help="Copy instead of symlink when sorting. Duplicates the data.",
     )
     args = parser.parse_args(argv)
 
@@ -107,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        net = load_detector(REPO_ROOT / args.model_dir)
+        net = load_detector(REPO_ROOT / args.models_root, args.model)
     except Exception as exc:
         print(f"Cannot load detector: {exc}", file=sys.stderr)
         return 1
@@ -142,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
             "min_confidence": args.min_confidence,
             "min_hits": args.min_hits,
         },
+        detector_name=args.model,
     )
     output_path = REPO_ROOT / args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -150,6 +204,14 @@ def main(argv: list[str] | None = None) -> int:
     summary = report["summary"]
     print(f"\n{summary['kept']} kept, {summary['rejected']} rejected, {failures} failed")
     print(f"Wrote {args.output}")
+
+    if args.sort_dir:
+        try:
+            sort_into_folders(report, REPO_ROOT / args.sort_dir, args.copy_files)
+        except Exception as exc:
+            print(f"Cannot sort into folders: {exc}", file=sys.stderr)
+            return 1
+
     return 1 if failures else 0
 
 

@@ -147,12 +147,36 @@ Output: `outputs/reports/triage-report.json`
 }
 ```
 
-Detector la MobileNet-SSD chay qua OpenCV DNN. Chon model nay vi license permissive; ultralytics YOLO la AGPL-3.0 nen khong dung cho ban thuong mai.
+Detector mac dinh la **YOLOv4** chay qua OpenCV DNN, input 608x608.
 
-Tuning:
+### Tai sao YOLOv4, khong phai MobileNet-SSD hay ultralytics YOLO
+
+Do tren footage CCTV that (VIRAT, camera goc cao, nguoi cao ~44px):
+
+| Detector | Input | Ket qua tren frame co nguoi | Toc do |
+|---|---|---|---|
+| MobileNet-SSD | 300x300 | **0.000 - truot hoan toan** | ~0.03s/frame |
+| MobileNet-SSD + luoi 3x3 | 300x300 | **0.000 - van truot** | ~0.3s/frame |
+| YOLOv4-tiny | 416x416 | **0.000 - truot** | ~0.03s/frame |
+| YOLOv4 | 608x608 | **0.35 - 0.69 - bat duoc** | ~0.8s/frame |
+
+MobileNet-SSD ep anh ve 300x300, nen nguoi cao 44px chi con ~18px - duoi nguong anchor box nho nhat cua SSD. Chia o cung khong cuu duoc.
+
+Ve license: darknet (nguon yolov4.weights) la **public domain**. Ultralytics YOLO co hieu nang tuong duong nhung la **AGPL-3.0**, se rang buoc phai mo source neu dung thuong mai - vi vay khong dung.
+
+Doi detector:
 
 ```bash
-.venv/bin/python scripts/triage_person.py --min-confidence 0.6 --sample-interval-ms 500 --min-hits 3
+.venv/bin/python scripts/triage_person.py --model mobilenet-ssd   # nhanh, kem
+.venv/bin/python scripts/triage_person.py --model yolov4          # mac dinh
+```
+
+### Nguong confidence
+
+YOLOv4 tren footage CCTV cho confidence **0.35-0.69** voi nguoi o xa, thap hon nhieu so voi canh quay gan. Nguong mac dinh `0.5` se bo sot. Voi footage giam sat nen dung:
+
+```bash
+--min-confidence 0.3
 ```
 
 ### Do do chinh xac
@@ -164,24 +188,11 @@ make eval-person          # tinh precision/recall
 
 Tap eval: `data/eval/person-detection/expected.json`. Nhan do nguoi xem frame xac nhan, khong phai do tool sinh. Video khong commit, nhan thi commit.
 
-Ket qua lan chay gan nhat (10 video, mac dinh `min_confidence=0.5`, `min_hits=2`):
-
-| Metric | Value |
-|---|---|
-| precision | 0.86 |
-| recall | 1.00 |
-| f1 | 0.92 |
-| confusion | TP=6 FP=1 TN=3 FN=0 |
-
-Nhan dung ca 6 video co nguoi that, ke ca ca kho: nguoi chi xuat hien vai giay, nguoi trong nha may thieu sang va bi che mot phan. Sai duy nhat: video sua bien bi nhan nham la nguoi (0.99).
-
-Output: `outputs/reports/person-detector-eval.json`, co ca danh sach video bi sai.
-
 ### Gioi han (quan trong)
 
 Day la tin hieu **triage**, khong phai ground truth. Script khong bao gio ghi `event_label` hay `ground_truth_status` - xem ADR-005.
 
-Tap eval chi co 10 video va **khong phai footage CCTV vanh dai**. So lieu tren chi chung minh detector nhan duoc nguoi that trong canh thong thuong. No khong du de ket luan cho camera an ninh that: goc cao, nguoi o xa, ban dem, hong ngoai deu chua duoc thu. Phai do lai tren footage that cua du an truoc khi tin.
+Tap eval hien tai la phim tu lieu quay gan, **khong phai footage CCTV vanh dai**. So lieu do tren no khong ket luan duoc gi cho camera an ninh that - bai hoc tu chinh MobileNet-SSD: no dat recall 1.00 tren tap eval do, roi truot 100% tren VIRAT. Ban dem, hong ngoai, nguoi o rat xa deu chua duoc thu.
 
 ## Validation
 

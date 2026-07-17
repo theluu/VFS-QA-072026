@@ -6,23 +6,29 @@ It never sets a label or a ground truth status - see ADR-005.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import cv2
 
-# MobileNet-SSD is trained on VOC; "person" is class index 15.
+from .detectors import PersonDetector, build_detector
+
+# Kept for the older MobileNet-SSD call sites; new code uses detectors.py.
 PERSON_CLASS_ID = 15
 INPUT_SIZE = (300, 300)
 MEAN_VALUE = 127.5
 SCALE_FACTOR = 1.0 / 127.5
+
+DEFAULT_MODEL = "yolov4"
 
 
 @dataclass
 class PersonHit:
     timestamp_ms: int
     confidence: float
+    boxes: list[dict[str, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -43,22 +49,18 @@ class VideoPersonResult:
             "frames_with_person": self.frames_with_person,
             "person_timestamps_ms": [hit.timestamp_ms for hit in self.hits],
             "hits": [
-                {"timestamp_ms": hit.timestamp_ms, "confidence": round(hit.confidence, 4)}
+                {
+                    "timestamp_ms": hit.timestamp_ms,
+                    "confidence": round(hit.confidence, 4),
+                    "boxes": hit.boxes,
+                }
                 for hit in self.hits
             ],
         }
 
 
-def load_detector(model_dir: str | Path) -> cv2.dnn.Net:
-    model_path = Path(model_dir)
-    prototxt = model_path / "MobileNetSSD_deploy.prototxt"
-    caffemodel = model_path / "MobileNetSSD_deploy.caffemodel"
-    for required in (prototxt, caffemodel):
-        if not required.exists():
-            raise FileNotFoundError(
-                f"Model file missing: {required}. Run `make fetch-person-model` first."
-            )
-    return cv2.dnn.readNetFromCaffe(str(prototxt), str(caffemodel))
+def load_detector(models_root: str | Path, model: str = DEFAULT_MODEL) -> PersonDetector:
+    return build_detector(model, models_root)
 
 
 def detect_persons_in_frame(net: cv2.dnn.Net, frame: Any, min_confidence: float) -> float:
@@ -83,15 +85,18 @@ def detect_persons_in_frame(net: cv2.dnn.Net, frame: Any, min_confidence: float)
 
 def detect_persons_in_video(
     video_path: str | Path,
-    net: cv2.dnn.Net,
+    net: PersonDetector,
     *,
     sample_interval_ms: int = 1000,
     min_confidence: float = 0.5,
     min_hits: int = 1,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> VideoPersonResult:
     """Sample one frame every sample_interval_ms and look for people.
 
     min_hits guards against a single false positive flagging a whole video.
+    on_progress(done, total) reports frames scanned: a ten-minute video is one
+    unit of work for minutes, which is not progress a caller can show.
     """
     path = Path(video_path)
     capture = cv2.VideoCapture(str(path))
@@ -109,16 +114,30 @@ def detect_persons_in_video(
         frames_sampled = 0
         max_confidence = 0.0
 
-        for timestamp_ms in range(0, duration_ms, sample_interval_ms):
+        timestamps = list(range(0, duration_ms, sample_interval_ms))
+        total_frames = len(timestamps)
+        if on_progress:
+            on_progress(0, total_frames)
+
+        for position, timestamp_ms in enumerate(timestamps):
             capture.set(cv2.CAP_PROP_POS_MSEC, timestamp_ms)
             ok, frame = capture.read()
+            if on_progress:
+                on_progress(position + 1, total_frames)
             if not ok or frame is None:
                 continue
             frames_sampled += 1
-            confidence = detect_persons_in_frame(net, frame, min_confidence)
+            boxes = net.detect_people(frame, min_confidence)
+            confidence = max((box.confidence for box in boxes), default=0.0)
             max_confidence = max(max_confidence, confidence)
-            if confidence > 0:
-                hits.append(PersonHit(timestamp_ms=timestamp_ms, confidence=confidence))
+            if boxes:
+                hits.append(
+                    PersonHit(
+                        timestamp_ms=timestamp_ms,
+                        confidence=confidence,
+                        boxes=[box.to_dict() for box in boxes],
+                    )
+                )
 
         return VideoPersonResult(
             video_path=str(path),

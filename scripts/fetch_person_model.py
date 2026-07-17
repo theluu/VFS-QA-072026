@@ -1,8 +1,8 @@
-"""Download the MobileNet-SSD person detector into models/.
+"""Download the person detector weights into models/.
 
-MobileNet-SSD is used instead of YOLO because its weights carry a permissive
-license; ultralytics YOLO is AGPL-3.0 and would impose source obligations on a
-commercial deployment.
+Both detectors carry permissive licenses. YOLOv4's weights come from darknet,
+which is public domain; ultralytics YOLO is avoided because it is AGPL-3.0 and
+would impose source obligations on a commercial deployment.
 """
 
 from __future__ import annotations
@@ -14,15 +14,26 @@ import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MODEL_DIR = REPO_ROOT / "models" / "mobilenet-ssd"
+MODELS_ROOT = REPO_ROOT / "models"
 
+# yolov4 is the default: MobileNet-SSD measures 0.000 on real CCTV frames that
+# contain people. Darknet is public domain, so unlike ultralytics YOLO (AGPL-3.0)
+# it carries no source obligation.
 FILES = [
     (
-        "MobileNetSSD_deploy.prototxt",
+        "yolov4/yolov4.cfg",
+        "https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4.cfg",
+    ),
+    (
+        "yolov4/yolov4.weights",
+        "https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.weights",
+    ),
+    (
+        "mobilenet-ssd/MobileNetSSD_deploy.prototxt",
         "https://raw.githubusercontent.com/djmv/MobilNet_SSD_opencv/master/MobileNetSSD_deploy.prototxt",
     ),
     (
-        "MobileNetSSD_deploy.caffemodel",
+        "mobilenet-ssd/MobileNetSSD_deploy.caffemodel",
         "https://raw.githubusercontent.com/djmv/MobilNet_SSD_opencv/master/MobileNetSSD_deploy.caffemodel",
     ),
 ]
@@ -40,9 +51,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
 
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    MODELS_ROOT.mkdir(parents=True, exist_ok=True)
     for name, url in FILES:
-        target = MODEL_DIR / name
+        target = MODELS_ROOT / name
+        target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists() and not args.force:
             print(f"skip (exists)  {name}  {target.stat().st_size // 1024} KB")
             continue
@@ -55,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         digest = hashlib.sha256(target.read_bytes()).hexdigest()[:16]
         print(f"  ok  {target.stat().st_size // 1024} KB  sha256:{digest}")
 
-    print(f"\nModel ready at {MODEL_DIR.relative_to(REPO_ROOT)}")
+    print(f"\nModels ready at {MODELS_ROOT.relative_to(REPO_ROOT)}")
     return 0
 
 

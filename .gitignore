@@ -32,5 +32,11 @@ outputs/runs/
 # Detector weights, downloaded via make fetch-person-model
 models/
 
-# Eval videos are downloaded, labels are committed
+# Browser-playable proxies, rebuilt on demand
+outputs/proxies/
+
+# Eval videos are downloaded; their labels are committed
 data/eval/**/*.mp4
+
+# Triage sort output (symlinks/copies of videos)
+outputs/triage/

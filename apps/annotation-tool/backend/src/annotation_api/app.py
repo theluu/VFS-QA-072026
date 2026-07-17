@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import threading
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -126,6 +128,283 @@ async def post_llm_review_note(request: Request) -> dict[str, Any]:
 @app.get("/repo")
 def repo_info() -> dict[str, str]:
     return {"root": REPO_ROOT.name}
+
+
+# --- Person triage -----------------------------------------------------------
+# Detection takes minutes on a long video, far past an HTTP timeout, so /run
+# starts a worker thread and the UI polls /status.
+
+_triage_lock = threading.Lock()
+_triage_state: dict[str, Any] = {
+    "status": "idle",  # idle | running | done | error
+    "processed": 0,
+    "total": 0,
+    "current": "",
+    "error": "",
+    "report": None,
+    "frame_done": 0,
+    "frame_total": 0,
+    "percent": 0,
+}
+
+# Results accumulate across runs, keyed by video path, so re-checking one video
+# replaces just that row instead of wiping the results for everything else.
+_triage_results: dict[str, Any] = {}
+
+
+def _set_triage(**fields: Any) -> None:
+    with _triage_lock:
+        _triage_state.update(fields)
+
+
+def _run_triage(video_paths: list[str], settings: dict[str, Any]) -> None:
+    try:
+        from candidate_mining.person_detect import detect_persons_in_video, load_detector
+
+        from scripts.triage_person import build_report
+
+        videos = [REPO_ROOT / path for path in video_paths]
+        _set_triage(status="running", processed=0, total=len(videos), error="", report=None)
+
+        net = load_detector(REPO_ROOT / "models", settings.get("model", "yolov4"))
+        total_videos = len(videos)
+
+        for index, (video, path) in enumerate(zip(videos, video_paths, strict=True)):
+            _set_triage(current=video.name, processed=index)
+
+            def report_frames(done: int, total: int, _index: int = index) -> None:
+                # Percent spans the whole run: finished videos plus how far into
+                # the current one, so a single long video still moves the bar.
+                fraction = (done / total) if total else 0
+                _set_triage(
+                    frame_done=done,
+                    frame_total=total,
+                    percent=round((_index + fraction) / total_videos * 100),
+                )
+
+            result = detect_persons_in_video(
+                video,
+                net,
+                sample_interval_ms=settings["sample_interval_ms"],
+                min_confidence=settings["min_confidence"],
+                min_hits=settings["min_hits"],
+                on_progress=report_frames,
+            )
+            with _triage_lock:
+                _triage_results[path] = result
+
+        with _triage_lock:
+            accumulated = list(_triage_results.values())
+        report = build_report(accumulated, settings, detector_name=settings.get("model", "yolov4"))
+        _set_triage(
+            status="done",
+            processed=len(videos),
+            current="",
+            report=report,
+            percent=100,
+        )
+    except Exception as exc:
+        _set_triage(status="error", error=str(exc), current="")
+
+
+@app.get("/triage/status")
+def triage_status() -> dict[str, Any]:
+    with _triage_lock:
+        return dict(_triage_state)
+
+
+@app.post("/triage/run")
+async def triage_run(request: Request) -> dict[str, Any]:
+    with _triage_lock:
+        if _triage_state["status"] == "running":
+            raise HTTPException(status_code=409, detail="A triage run is already in progress")
+
+    payload = await request.json()
+    requested = payload.get("videos")
+
+    if requested:
+        video_paths = []
+        for path in requested:
+            try:
+                resolved = safe_repo_path(path)
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            if not resolved.is_file():
+                raise HTTPException(status_code=400, detail=f"Not a file: {path}")
+            video_paths.append(path)
+    else:
+        input_dir = payload.get("input", "data/raw")
+        try:
+            safe_repo_path(input_dir)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        from scripts.triage_person import collect_videos
+
+        video_paths = [str(p.relative_to(REPO_ROOT)) for p in collect_videos(input_dir)]
+
+    if not video_paths:
+        raise HTTPException(status_code=400, detail="No videos selected")
+
+    settings = {
+        "sample_interval_ms": int(payload.get("sample_interval_ms", 1000)),
+        "min_confidence": float(payload.get("min_confidence", 0.5)),
+        "min_hits": int(payload.get("min_hits", 2)),
+        "model": payload.get("model", "yolov4"),
+    }
+
+    _set_triage(
+        status="running",
+        processed=0,
+        total=len(video_paths),
+        current="",
+        error="",
+        report=None,
+        frame_done=0,
+        frame_total=0,
+        percent=0,
+    )
+    threading.Thread(target=_run_triage, args=(video_paths, settings), daemon=True).start()
+    return {"started": True, "count": len(video_paths), "settings": settings}
+
+
+ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi"}
+
+
+@app.post("/triage/upload")
+async def triage_upload(
+    file: UploadFile = File(...),
+    path: str = Form("data/raw"),
+) -> dict[str, Any]:
+    """Add a video to an input folder from the UI."""
+    try:
+        directory = safe_repo_path(path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not directory.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+
+    # Strip any directory component: a filename is not a path, and an uploaded
+    # "../../x.mp4" must not escape the target folder.
+    filename = Path(file.filename or "").name
+    suffix = Path(filename).suffix.lower()
+    if not filename or suffix not in ALLOWED_VIDEO_SUFFIXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only {', '.join(sorted(ALLOWED_VIDEO_SUFFIXES))} are accepted",
+        )
+
+    target = directory / filename
+    stem = Path(filename).stem
+    counter = 1
+    while target.exists():
+        target = directory / f"{stem}-{counter}{suffix}"
+        counter += 1
+
+    size = 0
+    try:
+        with target.open("wb") as handle:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                handle.write(chunk)
+    except Exception as exc:
+        target.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"Cannot save file: {exc}") from exc
+
+    # A file the detector cannot open is worse than no file: reject it now
+    # rather than failing mid-run.
+    try:
+        from candidate_mining.video import probe_video
+
+        probe = probe_video(target)
+    except Exception as exc:
+        target.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Not a readable video: {exc}") from exc
+
+    return {
+        "path": str(target.relative_to(REPO_ROOT)),
+        "name": target.name,
+        "size_mb": round(size / 1024 / 1024, 1),
+        "duration_ms": probe["duration_ms"],
+    }
+
+
+_proxy_lock = threading.Lock()
+
+
+@app.get("/triage/preview")
+def triage_preview(path: str = Query(...)) -> FileResponse:
+    """Serve a video the browser can actually play.
+
+    Surveillance footage is often MPEG-4 Part 2 or MJPEG, which Chrome refuses.
+    Those get an H.264 proxy, built once and cached; the original is untouched
+    and stays what the detector reads.
+    """
+    from candidate_mining.video import BROWSER_SAFE_CODECS, probe_video, transcode_for_web
+
+    try:
+        source = safe_repo_path(path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    try:
+        probe = probe_video(source)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Cannot read video: {exc}") from exc
+
+    if probe["codec_name"] in BROWSER_SAFE_CODECS:
+        return FileResponse(source, media_type="video/mp4", filename=source.name)
+
+    digest = hashlib.sha256(str(source).encode()).hexdigest()[:12]
+    proxy = REPO_ROOT / "outputs" / "proxies" / f"{source.stem}-{digest}.mp4"
+
+    with _proxy_lock:
+        if not proxy.exists():
+            try:
+                transcode_for_web(source, proxy)
+            except Exception as exc:
+                proxy.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=500, detail=f"Cannot build preview: {exc}"
+                ) from exc
+
+    return FileResponse(proxy, media_type="video/mp4", filename=proxy.name)
+
+
+@app.get("/triage/videos")
+def triage_videos(path: str = Query("data/raw")) -> dict[str, Any]:
+    """The raw video list, so the UI can show and preview them before any run."""
+    try:
+        directory = safe_repo_path(path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not directory.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
+
+    videos = []
+    for item in sorted(directory.iterdir()):
+        if item.suffix.lower() not in {".mp4", ".mov", ".mkv", ".avi"}:
+            continue
+        videos.append(
+            {
+                "path": str(item.relative_to(REPO_ROOT)),
+                "name": item.name,
+                "size_mb": round(item.stat().st_size / 1024 / 1024, 1),
+            }
+        )
+    return {"path": path, "videos": videos}
+
+
+@app.get("/triage/inputs")
+def triage_inputs() -> dict[str, Any]:
+    """Folders that hold videos, so the UI can offer them instead of free text."""
+    candidates = []
+    for base in (REPO_ROOT / "data" / "raw", REPO_ROOT / "data" / "eval" / "person-detection"):
+        if base.is_dir() and any(p.suffix.lower() == ".mp4" for p in base.iterdir()):
+            count = sum(1 for p in base.iterdir() if p.suffix.lower() == ".mp4")
+            candidates.append({"path": str(base.relative_to(REPO_ROOT)), "video_count": count})
+    return {"inputs": candidates}
 
 
 # Mounted last so every API route above wins the match; StaticFiles only
