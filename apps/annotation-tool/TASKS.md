@@ -10,3 +10,5 @@
 - AT-008 Export: DONE
 - AT-009 Export validation: DONE
 - AT-010 Integration test: TODO, can browser automation sau khi npm install
+- AT-011 Web triage mine endpoint and UI handoff: DONE
+- AT-012 Web bbox MP4 render action: DONE

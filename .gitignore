@@ -28,3 +28,17 @@ outputs/runs/
 
 # Keep directory docs via README/.gitkeep only if needed.
 !.gitkeep
+
+# Detector weights, downloaded via make fetch-person-model
+models/
+
+# Browser-playable proxies, rebuilt on demand
+outputs/proxies/
+
+# Eval videos are downloaded; their labels are committed
+data/eval/**/*.mp4
+
+# Triage sort output (symlinks/copies of videos)
+outputs/triage/
+
+outputs/annotated/

@@ -16,6 +16,11 @@ API chinh:
 - `POST /manifest/validate`
 - `POST /annotations/export`
 - `POST /llm/review-note`
+- `POST /triage/run`
+- `GET /triage/status`
+- `POST /triage/mine`
+- `POST /triage/bbox`
+- `GET /triage/preview?path=data/raw/sample.mp4`
 
 ## Frontend
 
@@ -32,6 +37,9 @@ make annotation-tool
 - Form gan nhan, timestamp, status, reviewer va comment.
 - Auto-save vao `localStorage`.
 - Export annotation JSON qua backend.
+- Loc raw video bang person detector.
+- Tao candidate-mining outputs tu video co nguoi detect va load manifest de gan nhan.
+- Tao MP4 bbox burn-in tu raw video de review giong video reference.
 
 ## Keyboard Shortcuts
 
@@ -43,3 +51,6 @@ make annotation-tool
 
 - Progress tam thoi nam trong browser `localStorage`.
 - Export chinh thuc ghi vao `outputs/annotations/`.
+- Triage report web ghi vao `outputs/reports/triage-web.json`.
+- Candidate outputs tu triage ghi vao `outputs/runs/{run_id}/`.
+- Video bbox burn-in ghi vao `outputs/annotated/`.

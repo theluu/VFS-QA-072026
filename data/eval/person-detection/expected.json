@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0.0",
+  "labeled_by": "human review of sampled frames",
+  "label_rule": "expected_has_person is true only if a real person is visible. Drawings, cartoons and photographs of people on posters are not people.",
+  "videos": [
+    {
+      "video_path": "data/eval/person-detection/pd-abolene-cream.mp4",
+      "expected_has_person": true,
+      "source": "archive.org, public domain (Prelinger)",
+      "note": "Woman applying cream, face and torso fill the frame throughout."
+    },
+    {
+      "video_path": "data/eval/person-detection/pd-sunbeam-commercial.mp4",
+      "expected_has_person": true,
+      "source": "archive.org, public domain (Prelinger)",
+      "note": "Mostly food and a drawn poster; a real boy appears around 14s. Hard case."
+    },
+    {
+      "video_path": "data/eval/person-detection/pd-duck-and-cover.mp4",
+      "expected_has_person": true,
+      "source": "archive.org, public domain",
+      "note": "Opens with a cartoon turtle, then real children and adults. Hard case."
+    },
+    {
+      "video_path": "data/eval/person-detection/pd-cep502.mp4",
+      "expected_has_person": true,
+      "source": "archive.org, public domain (Prelinger)",
+      "note": "Teenagers on the telephone, close framing."
+    },
+    {
+      "video_path": "data/eval/person-detection/pd-when-you-know.mp4",
+      "expected_has_person": true,
+      "source": "archive.org, public domain (Prelinger)",
+      "note": "Aircraft footage with groups of men; people are a minority of frames."
+    },
+    {
+      "video_path": "data/eval/person-detection/pd-victory-1942.mp4",
+      "expected_has_person": true,
+      "source": "archive.org, public domain (Prelinger)",
+      "note": "Factory workers among machinery, often dim and partly occluded."
+    },
+    {
+      "video_path": "data/raw/ocean.mp4",
+      "expected_has_person": false,
+      "source": "data/raw sample corpus",
+      "note": "Fish, dolphins, birds, open sea. No people."
+    },
+    {
+      "video_path": "data/raw/street-30s.mp4",
+      "expected_has_person": false,
+      "source": "data/raw sample corpus",
+      "note": "Empty park path. No people in sampled frames."
+    },
+    {
+      "video_path": "data/raw/street-15s.mp4",
+      "expected_has_person": false,
+      "source": "data/raw sample corpus",
+      "note": "Empty park. No people in sampled frames."
+    },
+    {
+      "video_path": "data/raw/jellyfish-720p-2mb.mp4",
+      "expected_has_person": false,
+      "source": "data/raw sample corpus",
+      "note": "Single jellyfish underwater. Known false positive for the detector."
+    }
+  ]
+}

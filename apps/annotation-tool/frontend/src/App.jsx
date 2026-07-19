@@ -7,10 +7,13 @@ import {
   FileJson,
   RefreshCw,
   Save,
+  Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
+import TriagePanel from "./TriagePanel.jsx";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 const DEFAULT_MANIFEST = "data/samples/candidate-manifest.sample.json";
 
 function nowIso() {
@@ -64,6 +67,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [videoMissing, setVideoMissing] = useState(false);
   const [reviewNote, setReviewNote] = useState("");
+  const [view, setView] = useState("triage");
 
   const samples = manifest?.samples || [];
   const current = samples[index] || null;
@@ -124,11 +128,31 @@ export default function App() {
     []
   );
 
+  const openGeneratedManifest = useCallback(
+    async (path) => {
+      await loadManifest(path);
+      setView("annotate");
+    },
+    [loadManifest]
+  );
+
+  const resolveDefaultManifest = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/manifests`);
+      if (!response.ok) return DEFAULT_MANIFEST;
+      const payload = await response.json();
+      return payload.manifests?.[0] || DEFAULT_MANIFEST;
+    } catch {
+      return DEFAULT_MANIFEST;
+    }
+  }, []);
+
   useEffect(() => {
     loadConfig()
-      .then(() => loadManifest(DEFAULT_MANIFEST))
+      .then(resolveDefaultManifest)
+      .then((path) => loadManifest(path))
       .catch((exc) => setError(exc.message));
-  }, [loadConfig, loadManifest]);
+  }, [loadConfig, loadManifest, resolveDefaultManifest]);
 
   useEffect(() => {
     if (!current || !config) {
@@ -208,26 +232,46 @@ export default function App() {
       <header className="topbar">
         <div>
           <h1>AI Camera Annotation</h1>
-          <p>{manifest?.dataset_id || "No dataset loaded"}</p>
+          <p>{view === "triage" ? "Buoc 1 - loc video" : manifest?.dataset_id || "No dataset loaded"}</p>
         </div>
-        <div className="topbar-actions">
-          <input
-            value={manifestPath}
-            onChange={(event) => setManifestPath(event.target.value)}
-            aria-label="Manifest path"
-          />
-          <button onClick={() => loadManifest(manifestPath).catch((exc) => setError(exc.message))}>
-            <RefreshCw size={16} />
-            Load
+        <div className="view-tabs">
+          <button
+            className={view === "triage" ? "active" : ""}
+            onClick={() => setView("triage")}
+          >
+            <Users size={15} />
+            Loc video
           </button>
-          <button onClick={exportAnnotations} disabled={!manifest}>
-            <Download size={16} />
-            Export
+          <button
+            className={view === "annotate" ? "active" : ""}
+            onClick={() => setView("annotate")}
+          >
+            <FileJson size={15} />
+            Gan nhan
           </button>
         </div>
+        {view === "annotate" && (
+          <div className="topbar-actions">
+            <input
+              value={manifestPath}
+              onChange={(event) => setManifestPath(event.target.value)}
+              aria-label="Manifest path"
+            />
+            <button onClick={() => loadManifest(manifestPath).catch((exc) => setError(exc.message))}>
+              <RefreshCw size={16} />
+              Load
+            </button>
+            <button onClick={exportAnnotations} disabled={!manifest}>
+              <Download size={16} />
+              Export
+            </button>
+          </div>
+        )}
       </header>
 
-      <section className="workspace">
+      {view === "triage" && <TriagePanel apiBase={API_BASE} onManifestReady={openGeneratedManifest} />}
+
+      <section className="workspace" hidden={view !== "annotate"}>
         <aside className="queue-panel">
           <div className="panel-header">
             <FileJson size={18} />

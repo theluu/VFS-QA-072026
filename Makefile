@@ -1,4 +1,6 @@
-PYTHON ?= python3
+# Python 3.11: the default yolov8 detector needs torch, which has no build for
+# 3.12+ on this Intel-macOS box. See ADR-007.
+PYTHON ?= python3.11
 VENV ?= .venv
 VENV_PYTHON := $(VENV)/bin/python
 VENV_PIP := $(VENV)/bin/pip
@@ -14,8 +16,9 @@ API_HOST ?= 127.0.0.1
 API_PORT ?= 8000
 API_BASE ?= http://$(API_HOST):$(API_PORT)
 FRONTEND_PORT ?= 5173
+TRIAGE_INPUT ?= data/raw/catalog.json
 
-.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool validate-dataset coverage-report release
+.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool app frontend-build fetch-videos mine-all fetch-person-model triage-person fetch-eval-videos eval-person annotate-video cut-suspicious validate-dataset coverage-report release
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -44,6 +47,36 @@ annotation-api:
 
 annotation-tool:
 	cd apps/annotation-tool/frontend && VITE_API_BASE=$(API_BASE) npm run dev -- --host 127.0.0.1 --port $(FRONTEND_PORT)
+
+frontend-build:
+	cd apps/annotation-tool/frontend && npm run build
+
+app: frontend-build
+	PYTHONPATH=$(PYTHONPATH) $(UVICORN) annotation_api.app:app --host $(API_HOST) --port $(API_PORT)
+
+fetch-videos:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/fetch_sample_videos.py --output data/raw
+
+mine-all:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/mine_all.py
+
+fetch-person-model:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/fetch_person_model.py
+
+triage-person:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/triage_person.py --input $(TRIAGE_INPUT)
+
+fetch-eval-videos:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/fetch_eval_videos.py
+
+eval-person:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/eval_person_detector.py
+
+annotate-video:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/annotate_video.py --input $(INPUT)
+
+cut-suspicious:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/cut_suspicious_clip.py --input $(INPUT)
 
 validate-dataset:
 	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/validate_dataset.py --manifest $(MANIFEST) --annotations $(ANNOTATIONS)

@@ -9,3 +9,5 @@
 - CM-007 Manifest writer: DONE
 - CM-008 Manifest validation: DONE
 - CM-009 Integration test: TODO, can video fixture an toan
+- CM-010 Person-detection report to candidate outputs: DONE
+- CM-011 Person bbox review video renderer: DONE

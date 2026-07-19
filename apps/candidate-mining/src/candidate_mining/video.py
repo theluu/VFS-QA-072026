@@ -46,6 +46,42 @@ def probe_video(path: str | Path) -> dict[str, Any]:
     }
 
 
+# Codecs a browser will play. Anything else needs a proxy to be previewable.
+BROWSER_SAFE_CODECS = {"h264", "vp8", "vp9", "av1"}
+
+
+def transcode_for_web(input_path: str | Path, output_path: str | Path, max_height: int = 720) -> None:
+    """Write an H.264 copy for playback in a browser.
+
+    The original stays the detector's input: re-encoding changes pixels, and a
+    QA result measured on a re-encode is not a result about the source footage.
+    """
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    command = [
+        "ffmpeg",
+        "-v",
+        "error",
+        "-y",
+        "-i",
+        str(input_path),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "26",
+        "-vf",
+        f"scale=-2:min({max_height}\\,ih)",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "+faststart",
+        str(output),
+    ]
+    _run(command)
+
+
 def cut_clip(input_path: str | Path, output_path: str | Path, start_ms: int, end_ms: int) -> None:
     if end_ms <= start_ms:
         raise ValueError("end_ms must be greater than start_ms")

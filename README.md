@@ -66,26 +66,133 @@ Output chinh:
 
 ## Annotation Tool
 
-Backend:
+### Chay 1 link (khuyen nghi cho demo/test)
+
+```bash
+make app
+```
+
+Target nay build frontend roi cho FastAPI serve luon UI tinh tai `/`. Chi can mo mot link duy nhat:
+
+```text
+http://127.0.0.1:8000
+```
+
+UI va API cung origin nen khong can CORS va khong can chay hai process. Doi port:
+
+```bash
+make app API_PORT=8020
+```
+
+Khi mo, UI goi `GET /manifests` va tu load run dau tien co trong `outputs/runs/`. Neu chua co run nao thi fallback ve manifest sample. Van co the go duong dan manifest khac vao o tren cung roi bam Load.
+
+### Che do dev (2 process, co hot-reload)
+
+Khi sua code React can hot-reload thi chay rieng backend va Vite dev server:
 
 ```bash
 make annotation-api
-```
-
-Frontend:
-
-```bash
 make annotation-tool
 ```
 
-Mac dinh UI goi API tai `http://127.0.0.1:8000`. Neu port 8000 dang ban, chay:
+Mac dinh UI goi API tai `http://127.0.0.1:8000`. Neu port 8000 dang ban:
 
 ```bash
 make annotation-api API_PORT=8020
 make annotation-tool API_PORT=8020 API_BASE=http://127.0.0.1:8020 FRONTEND_PORT=5175
 ```
 
-Trong lan setup hien tai, backend dang chay tai `http://127.0.0.1:8020` va frontend tai `http://127.0.0.1:5175`.
+## Video Test
+
+Tai bo video mau cong khai ve `data/raw/` (khong commit) va sinh file events tuong ung:
+
+```bash
+make fetch-videos
+```
+
+Chay candidate mining cho toan bo video trong catalog (tham so window duoc scale theo duration tung video):
+
+```bash
+make mine-all
+```
+
+Moi video ra mot run tai `outputs/runs/<ten-video>/`. Mo UI va tro vao manifest bat ky, vi du:
+
+```text
+outputs/runs/street-30s/candidate-manifest.json
+```
+
+Luu y: bo video mau la canh ngoai troi/animation cong khai, dung de kiem tra pipeline chay dung. Day khong phai footage CCTV vanh dai that va khong thay the du lieu test dai dien cho use case.
+
+## Person Triage (Buoc 1)
+
+Loc video tho: video nao co nguoi, video nao bi loai.
+
+```bash
+make fetch-person-model                      # tai detector, 1 lan
+make triage-person                           # input mac dinh: data/raw/catalog.json
+make triage-person TRIAGE_INPUT=data/raw     # hoac mot thu muc video
+```
+
+Output: `outputs/reports/triage-report.json`
+
+```json
+{
+  "summary": {"total": 16, "kept": 7, "rejected": 9},
+  "videos": [
+    {"video_path": "data/raw/x.mp4", "has_person": true, "max_confidence": 0.91,
+     "person_timestamps_ms": [3000, 6000], "decision": "keep"}
+  ],
+  "rejected": ["data/raw/ocean.mp4"]
+}
+```
+
+Detector mac dinh la **YOLOv4** chay qua OpenCV DNN, input 608x608.
+
+### Tai sao YOLOv4, khong phai MobileNet-SSD hay ultralytics YOLO
+
+Do tren footage CCTV that (VIRAT, camera goc cao, nguoi cao ~44px):
+
+| Detector | Input | Ket qua tren frame co nguoi | Toc do |
+|---|---|---|---|
+| MobileNet-SSD | 300x300 | **0.000 - truot hoan toan** | ~0.03s/frame |
+| MobileNet-SSD + luoi 3x3 | 300x300 | **0.000 - van truot** | ~0.3s/frame |
+| YOLOv4-tiny | 416x416 | **0.000 - truot** | ~0.03s/frame |
+| YOLOv4 | 608x608 | **0.35 - 0.69 - bat duoc** | ~0.8s/frame |
+
+MobileNet-SSD ep anh ve 300x300, nen nguoi cao 44px chi con ~18px - duoi nguong anchor box nho nhat cua SSD. Chia o cung khong cuu duoc.
+
+Ve license: darknet (nguon yolov4.weights) la **public domain**. Ultralytics YOLO co hieu nang tuong duong nhung la **AGPL-3.0**, se rang buoc phai mo source neu dung thuong mai - vi vay khong dung.
+
+Doi detector:
+
+```bash
+.venv/bin/python scripts/triage_person.py --model mobilenet-ssd   # nhanh, kem
+.venv/bin/python scripts/triage_person.py --model yolov4          # mac dinh
+```
+
+### Nguong confidence
+
+YOLOv4 tren footage CCTV cho confidence **0.35-0.69** voi nguoi o xa, thap hon nhieu so voi canh quay gan. Nguong mac dinh `0.5` se bo sot. Voi footage giam sat nen dung:
+
+```bash
+--min-confidence 0.3
+```
+
+### Do do chinh xac
+
+```bash
+make fetch-eval-videos    # tai video public domain co nguoi that
+make eval-person          # tinh precision/recall
+```
+
+Tap eval: `data/eval/person-detection/expected.json`. Nhan do nguoi xem frame xac nhan, khong phai do tool sinh. Video khong commit, nhan thi commit.
+
+### Gioi han (quan trong)
+
+Day la tin hieu **triage**, khong phai ground truth. Script khong bao gio ghi `event_label` hay `ground_truth_status` - xem ADR-005.
+
+Tap eval hien tai la phim tu lieu quay gan, **khong phai footage CCTV vanh dai**. So lieu do tren no khong ket luan duoc gi cho camera an ninh that - bai hoc tu chinh MobileNet-SSD: no dat recall 1.00 tren tap eval do, roi truot 100% tren VIRAT. Ban dem, hong ngoai, nguoi o rat xa deu chua duoc thu.
 
 ## Validation
 
