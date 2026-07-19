@@ -12,6 +12,21 @@ PYTHONPATH=apps/candidate-mining/src:. python3 -m candidate_mining.cli \
   --random-seed 42
 ```
 
+## Detect-to-Candidate Usage
+
+Sau khi co `outputs/reports/triage-report.json` hoac report tu web triage:
+
+```bash
+PYTHONPATH=apps/candidate-mining/src:.:scripts .venv/bin/python scripts/mine_from_triage.py \
+  --triage outputs/reports/triage-report.json \
+  --output-root outputs/runs \
+  --padding-ms 30000 \
+  --random-seed 42
+```
+
+Rule `person_detected_v1` chi tao candidate clips tu timestamp detector thay nguoi.
+Human reviewer van phai gan `event_label` va `ground_truth_status`.
+
 ## Input Event Format
 
 ```json
@@ -48,6 +63,7 @@ outputs/runs/{run_id}/
 
 ## Limitations
 
-- POC nhan candidate events tu JSON input, chua co detector tu dong.
+- CLI chinh van nhan candidate events tu JSON input.
+- Detect-to-candidate chi ho tro person detector triage, khong tu gan ground truth.
 - Can ffmpeg/ffprobe de xu ly video thuc.
 - Khong tao ground truth.

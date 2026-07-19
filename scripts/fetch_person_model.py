@@ -1,8 +1,9 @@
 """Download the person detector weights into models/.
 
-Both detectors carry permissive licenses. YOLOv4's weights come from darknet,
-which is public domain; ultralytics YOLO is avoided because it is AGPL-3.0 and
-would impose source obligations on a commercial deployment.
+yolov8 (Ultralytics) is the default detector and gives the best recall on small,
+distant people - matching the reference annotated sample. Its weights are
+AGPL-3.0; the POC accepts that trade-off (see DECISIONS.md). yolov4 (darknet,
+public domain) and MobileNet-SSD remain as permissive-license fallbacks.
 """
 
 from __future__ import annotations
@@ -16,10 +17,23 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_ROOT = REPO_ROOT / "models"
 
-# yolov4 is the default: MobileNet-SSD measures 0.000 on real CCTV frames that
-# contain people. Darknet is public domain, so unlike ultralytics YOLO (AGPL-3.0)
-# it carries no source obligation.
+# yolov8 is the default. yolov8m is the rendered default weight; n/s are pulled
+# too so a caller can trade accuracy for speed. Weights come from the Ultralytics
+# assets release (AGPL-3.0). yolov4/MobileNet-SSD stay as permissive fallbacks.
+ULTRALYTICS_RELEASE = "https://github.com/ultralytics/assets/releases/download/v8.2.0"
 FILES = [
+    (
+        "yolov8/yolov8n.pt",
+        f"{ULTRALYTICS_RELEASE}/yolov8n.pt",
+    ),
+    (
+        "yolov8/yolov8s.pt",
+        f"{ULTRALYTICS_RELEASE}/yolov8s.pt",
+    ),
+    (
+        "yolov8/yolov8m.pt",
+        f"{ULTRALYTICS_RELEASE}/yolov8m.pt",
+    ),
     (
         "yolov4/yolov4.cfg",
         "https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4.cfg",

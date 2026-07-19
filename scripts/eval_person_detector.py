@@ -33,7 +33,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--expected", default="data/eval/person-detection/expected.json")
     parser.add_argument("--output", default="outputs/reports/person-detector-eval.json")
     parser.add_argument("--models-root", default="models")
-    parser.add_argument("--model", default="yolov4", choices=["yolov4", "mobilenet-ssd"])
+    parser.add_argument(
+        "--model", default="yolov8", choices=["yolov8", "yolov4", "mobilenet-ssd"]
+    )
     parser.add_argument("--sample-interval-ms", type=int, default=1000)
     parser.add_argument("--min-confidence", type=float, default=0.5)
     parser.add_argument("--min-hits", type=int, default=2)

@@ -1,15 +1,21 @@
 """Person detector backends.
 
-Two backends, because they are not interchangeable in practice:
+Three backends, because they are not interchangeable in practice:
 
-- yolov4:        608x608 input, COCO. Finds people in perimeter CCTV, where a
-                 person is a few dozen pixels tall. ~0.8s/frame on CPU.
+- yolov8:        Ultralytics YOLOv8, 1920px input, COCO. Best recall on small,
+                 distant figures - this is the default and matches the reference
+                 annotated sample. Needs torch, so it runs in a Python 3.11 venv
+                 (torch has no build for this repo's newer Python).
+- yolov4:        832x832 input, COCO, via OpenCV-DNN. No torch. Kept as a
+                 permissive-license fallback for envs without the YOLOv8 stack.
 - mobilenet-ssd: 300x300 input, VOC. ~25x faster and useless for that footage -
                  measured 0.000 confidence on real surveillance frames that
                  contain people, including with 3x3 tiling.
 
-Both carry permissive licenses (darknet is public domain, MobileNet-SSD Caffe
-is permissive). Ultralytics YOLO is deliberately not used: it is AGPL-3.0.
+Licensing note: yolov4 (darknet, public domain) and MobileNet-SSD Caffe are
+permissive. Ultralytics YOLOv8 is AGPL-3.0; it was previously avoided for that
+reason, but the POC now accepts the AGPL trade-off to get the sample's detection
+quality. See DECISIONS.md.
 """
 
 from __future__ import annotations
@@ -106,8 +112,12 @@ class MobileNetSsdDetector(PersonDetector):
 
 class YoloV4Detector(PersonDetector):
     name = "yolov4"
+    # 832, not 608: on high-angle CCTV a distant person spans a few dozen pixels,
+    # and 608 either misses them or scores them below threshold. Measured on VIRAT,
+    # 832 lifts a distant figure from ~0.32 to ~0.9 and finds ones 608 dropped.
+    NMS_IOU = 0.45
 
-    def __init__(self, model_dir: str | Path, input_size: int = 608) -> None:
+    def __init__(self, model_dir: str | Path, input_size: int = 832) -> None:
         directory = Path(model_dir)
         cfg = directory / "yolov4.cfg"
         weights = directory / "yolov4.weights"
@@ -128,31 +138,118 @@ class YoloV4Detector(PersonDetector):
         self.net.setInput(blob)
         outputs = self.net.forward(self.output_layers)
 
-        boxes = []
+        # YOLO emits many overlapping boxes per object; collect then dedupe with
+        # non-max suppression, or one person shows up as a stack of boxes.
+        rects: list[list[float]] = []
+        confidences: list[float] = []
         for output in outputs:
             for detection in output:
                 scores = detection[5:]
                 class_id = int(scores.argmax())
                 confidence = float(scores[class_id])
                 if class_id == COCO_PERSON_CLASS_ID and confidence >= min_confidence:
-                    # YOLO gives center x,y and w,h, already normalized 0..1.
                     cx, cy, bw, bh = (float(v) for v in detection[0:4])
-                    boxes.append(
-                        PersonBox(
-                            x=max(0.0, cx - bw / 2),
-                            y=max(0.0, cy - bh / 2),
-                            w=bw,
-                            h=bh,
-                            confidence=confidence,
-                        )
+                    rects.append([cx - bw / 2, cy - bh / 2, bw, bh])
+                    confidences.append(confidence)
+
+        if not rects:
+            return []
+
+        keep = cv2.dnn.NMSBoxes(rects, confidences, min_confidence, self.NMS_IOU)
+        indices = [int(i) for i in keep.flatten()] if len(keep) else []
+
+        boxes = []
+        for index in indices:
+            x, y, bw, bh = rects[index]
+            boxes.append(
+                PersonBox(
+                    x=max(0.0, x),
+                    y=max(0.0, y),
+                    w=bw,
+                    h=bh,
+                    confidence=confidences[index],
+                )
+            )
+        return boxes
+
+
+class YoloV8Detector(PersonDetector):
+    name = "yolov8"
+    # Mirrors the reference PersonYoloSettings: NMS is applied inside ultralytics,
+    # so unlike the YOLOv4 path there is no separate NMSBoxes step here.
+    IOU = 0.45
+
+    def __init__(
+        self, model_dir: str | Path, weight_name: str = "yolov8m.pt", input_size: int = 1920
+    ) -> None:
+        # 1920, not the ultralytics default 640: VIRAT people are a few dozen
+        # pixels tall, and downscaling a 1280x720 frame to 640 shrinks them below
+        # detectability. Measured on VIRAT, 640 finds 0 people, 1920 finds them at
+        # ~0.4-0.7 confidence - matching the reference sample. Cost: ~2.5s/frame on
+        # CPU (same trade-off the YOLOv4 backend makes with its 832 input).
+        directory = Path(model_dir)
+        self.weights = directory / weight_name
+        if not self.weights.exists():
+            raise FileNotFoundError(
+                f"Model file missing: {self.weights}. Run `make fetch-person-model` first."
+            )
+        self.input_size = input_size
+        self._model: Any | None = None
+
+    def _load_model(self) -> Any:
+        # ultralytics (and torch) are imported lazily so importing this module
+        # never drags in the heavy stack; only building this backend does.
+        if self._model is None:
+            from ultralytics import YOLO
+
+            self._model = YOLO(str(self.weights))
+        return self._model
+
+    def detect_people(self, frame: Any, min_confidence: float) -> list[PersonBox]:
+        model = self._load_model()
+        height, width = frame.shape[:2]
+        results = model.predict(
+            frame,
+            classes=[COCO_PERSON_CLASS_ID],
+            conf=min_confidence,
+            iou=self.IOU,
+            imgsz=self.input_size,
+            device="cpu",
+            verbose=False,
+        )
+
+        boxes: list[PersonBox] = []
+        for result in results:
+            if result.boxes is None:
+                continue
+            for xyxy, confidence in zip(
+                result.boxes.xyxy.tolist(), result.boxes.conf.tolist()
+            ):
+                x1, y1, x2, y2 = (float(v) for v in xyxy)
+                # ultralytics reports pixel corners; normalize 0..1 so the box
+                # survives any later resize or proxy transcode, like the others.
+                left = max(0.0, x1)
+                top = max(0.0, y1)
+                boxes.append(
+                    PersonBox(
+                        x=left / width,
+                        y=top / height,
+                        w=(min(float(width), x2) - left) / width,
+                        h=(min(float(height), y2) - top) / height,
+                        confidence=float(confidence),
                     )
+                )
         return boxes
 
 
 def build_detector(model: str, models_root: str | Path) -> PersonDetector:
     root = Path(models_root)
+    if model == "yolov8":
+        return YoloV8Detector(root / "yolov8")
     if model == "yolov4":
         return YoloV4Detector(root / "yolov4")
     if model == "mobilenet-ssd":
         return MobileNetSsdDetector(root / "mobilenet-ssd")
-    raise ValueError(f"Unknown detector: {model}. Use 'yolov4' or 'mobilenet-ssd'.")
+    raise ValueError(
+        f"Unknown detector: {model}. Use 'yolov8', 'yolov4' or 'mobilenet-ssd'."
+    )

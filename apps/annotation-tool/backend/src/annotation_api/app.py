@@ -9,8 +9,9 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
-from scripts.validation_core import REPO_ROOT
+from scripts.validation_core import REPO_ROOT, write_json
 
 from . import __version__
 from .llm import draft_review_note
@@ -142,6 +143,7 @@ _triage_state: dict[str, Any] = {
     "current": "",
     "error": "",
     "report": None,
+    "report_path": "",
     "frame_done": 0,
     "frame_total": 0,
     "percent": 0,
@@ -196,11 +198,14 @@ def _run_triage(video_paths: list[str], settings: dict[str, Any]) -> None:
         with _triage_lock:
             accumulated = list(_triage_results.values())
         report = build_report(accumulated, settings, detector_name=settings.get("model", "yolov4"))
+        report_path = REPO_ROOT / "outputs" / "reports" / "triage-web.json"
+        write_json(report_path, report)
         _set_triage(
             status="done",
             processed=len(videos),
             current="",
             report=report,
+            report_path=str(report_path.relative_to(REPO_ROOT)),
             percent=100,
         )
     except Exception as exc:
@@ -259,12 +264,126 @@ async def triage_run(request: Request) -> dict[str, Any]:
         current="",
         error="",
         report=None,
+        report_path="",
         frame_done=0,
         frame_total=0,
         percent=0,
     )
     threading.Thread(target=_run_triage, args=(video_paths, settings), daemon=True).start()
     return {"started": True, "count": len(video_paths), "settings": settings}
+
+
+@app.post("/triage/mine")
+async def triage_mine(request: Request) -> dict[str, Any]:
+    with _triage_lock:
+        if _triage_state["status"] == "running":
+            raise HTTPException(status_code=409, detail="A triage run is still in progress")
+        report = _triage_state.get("report")
+
+    if not isinstance(report, dict):
+        raise HTTPException(status_code=400, detail="Run person detection before mining candidates")
+
+    payload = await request.json()
+    requested = payload.get("videos") or report.get("kept") or []
+    if not isinstance(requested, list) or not requested:
+        raise HTTPException(status_code=400, detail="No videos selected for candidate mining")
+
+    output_root_raw = str(payload.get("output_root") or "outputs/runs")
+    try:
+        output_root = safe_repo_path(output_root_raw)
+        output_root.relative_to(REPO_ROOT / "outputs")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Output root must be under outputs/: {exc}") from exc
+
+    try:
+        random_seed = int(payload.get("random_seed", 42))
+        merge_gap_ms = int(payload.get("merge_gap_ms", 3000))
+        padding_ms = int(payload.get("padding_ms", load_config().get("clip_padding_ms", 30000)))
+        max_clips_per_video = int(payload.get("max_clips_per_video", 6))
+        background_count = int(payload.get("background_count", 2))
+        background_duration_ms = int(payload.get("background_duration_ms", 15000))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid mining setting: {exc}") from exc
+
+    from candidate_mining.detected import mine_person_detection_video, safe_run_id
+
+    videos = report.get("videos") or []
+    kept_entries = {
+        item["video_path"]: item
+        for item in videos
+        if isinstance(item, dict) and item.get("decision") == "keep" and item.get("video_path")
+    }
+    outputs = []
+    errors = []
+    for video_path in requested:
+        if video_path not in kept_entries:
+            errors.append(f"No kept person-detection result for {video_path}")
+            continue
+        try:
+            source = safe_repo_path(str(video_path))
+            if not source.is_file():
+                raise FileNotFoundError(f"Not a file: {video_path}")
+            entry = {
+                **kept_entries[video_path],
+                "detector": report.get("detector", "unknown"),
+                "settings": report.get("settings", {}),
+            }
+            result = mine_person_detection_video(
+                video_path=source,
+                detection_entry=entry,
+                output_dir=output_root / safe_run_id(source),
+                dataset_id=str(payload.get("dataset_id") or "person-detected"),
+                random_seed=random_seed,
+                merge_gap_ms=merge_gap_ms,
+                padding_ms=padding_ms,
+                max_clips_per_video=max_clips_per_video,
+                background_count=background_count,
+                background_duration_ms=background_duration_ms,
+                project_root=REPO_ROOT,
+            )
+            outputs.append(result)
+        except Exception as exc:
+            errors.append(f"{video_path}: {exc}")
+
+    if not outputs:
+        raise HTTPException(status_code=422, detail=errors or ["No candidate output was generated"])
+    return {"ok": not errors, "outputs": outputs, "errors": errors}
+
+
+@app.post("/triage/bbox")
+async def triage_bbox(request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    video_path = payload.get("path")
+    if not isinstance(video_path, str) or not video_path:
+        raise HTTPException(status_code=400, detail="path is required")
+    try:
+        source = safe_repo_path(video_path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not source.is_file():
+        raise HTTPException(status_code=400, detail=f"Not a file: {video_path}")
+
+    try:
+        model = str(payload.get("model") or "yolov8")
+        sample_fps = float(payload.get("sample_fps", 0.5))
+        min_confidence = float(payload.get("min_confidence", 0.3))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid bbox setting: {exc}") from exc
+
+    from candidate_mining.bbox_video import render_person_bbox_video
+
+    try:
+        result = await run_in_threadpool(
+            render_person_bbox_video,
+            input_path=source,
+            models_root=REPO_ROOT / "models",
+            model=model,
+            sample_fps=sample_fps,
+            min_confidence=min_confidence,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot render bbox video: {exc}") from exc
+    return {"ok": True, "result": result}
 
 
 ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi"}

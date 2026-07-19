@@ -457,6 +457,39 @@ button:disabled {
   color: #94a3b8;
 }
 
+.triage-summary button {
+  background: #0f172a;
+  border: 0;
+  color: #fff;
+  font-weight: 700;
+}
+
+.triage-manifest-output {
+  display: grid;
+  gap: 8px;
+}
+
+.triage-manifest-output button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  display: grid;
+  gap: 4px 8px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  justify-items: start;
+  text-align: left;
+  width: 100%;
+}
+
+.triage-manifest-output span {
+  overflow-wrap: anywhere;
+}
+
+.triage-manifest-output small {
+  color: #64748b;
+  font-size: 12px;
+}
+
 .triage-columns {
   display: grid;
   grid-template-columns: 1fr 1fr 1.6fr;
@@ -565,6 +598,33 @@ button:disabled {
   background: #f8fafc;
   font-size: 11px;
   cursor: pointer;
+}
+
+.bbox-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bbox-actions > button {
+  justify-content: center;
+}
+
+.bbox-output {
+  display: grid;
+  gap: 6px;
+}
+
+.bbox-output small {
+  color: #64748b;
+  overflow-wrap: anywhere;
+}
+
+.bbox-output video {
+  background: #0f172a;
+  border-radius: 8px;
+  max-height: 280px;
+  width: 100%;
 }
 
 .triage-empty {

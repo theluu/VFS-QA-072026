@@ -15,28 +15,18 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "candidate-mining" / "src"))
 
-from candidate_mining import __version__
-from candidate_mining.core import (
-    TimeWindow,
-    build_sample,
-    safe_relative_path,
-    stable_source_video_id,
+from candidate_mining.core import TimeWindow
+from candidate_mining.detected import (
+    detection_windows_from_timestamps,
+    mine_person_detection_video,
+    safe_run_id,
 )
-from candidate_mining.video import cut_clip, probe_video
-
-from scripts.validation_core import validate_candidate_manifest, write_json
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CANDIDATE_RULE = "person_detected_v1"
-
-
-def utc_now() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def group_timestamps(
@@ -48,24 +38,12 @@ def group_timestamps(
 ) -> list[TimeWindow]:
     """Merge nearby detections into one window, so a person walking through does
     not become a dozen one-second clips."""
-    if not timestamps:
-        return []
-
-    ordered = sorted(timestamps)
-    clusters: list[list[int]] = [[ordered[0]]]
-    for stamp in ordered[1:]:
-        if stamp - clusters[-1][-1] <= merge_gap_ms:
-            clusters[-1].append(stamp)
-        else:
-            clusters.append([stamp])
-
-    windows = []
-    for cluster in clusters:
-        start = max(0, cluster[0] - padding_ms)
-        end = min(duration_ms, cluster[-1] + padding_ms)
-        if end > start:
-            windows.append(TimeWindow(start_ms=start, end_ms=end))
-    return windows
+    return detection_windows_from_timestamps(
+        timestamps,
+        merge_gap_ms=merge_gap_ms,
+        padding_ms=padding_ms,
+        duration_ms=duration_ms,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -100,91 +78,34 @@ def main(argv: list[str] | None = None) -> int:
             failures += 1
             continue
 
-        run_id = video_path.stem
+        run_id = safe_run_id(video_path)
         output_dir = REPO_ROOT / args.output_root / run_id
-        clips_dir = output_dir / "clips"
-        clips_dir.mkdir(parents=True, exist_ok=True)
-
         try:
-            video = probe_video(video_path)
-        except Exception as exc:
-            print(f"  FAILED probe {run_id}: {exc}", file=sys.stderr)
-            failures += 1
-            continue
-
-        windows = group_timestamps(
-            entry["person_timestamps_ms"],
-            merge_gap_ms=args.merge_gap_ms,
-            padding_ms=args.padding_ms,
-            duration_ms=video["duration_ms"],
-        )[: args.max_clips_per_video]
-
-        if not windows:
-            print(f"  skip {run_id}: no person timestamps")
-            continue
-
-        source_video_path = safe_relative_path(video_path, REPO_ROOT)
-        source_video_id = stable_source_video_id(
-            source_video_path, video["duration_ms"], video["file_size"]
-        )
-
-        samples = []
-        confidence_by_ts = {
-            hit["timestamp_ms"]: hit["confidence"] for hit in entry.get("hits", [])
-        }
-        for window in windows:
-            sample_id = f"{source_video_id}__{window.start_ms}__{window.end_ms}__{CANDIDATE_RULE}"
-            clip_path = clips_dir / f"{sample_id}.mp4"
-            try:
-                cut_clip(video_path, clip_path, window.start_ms, window.end_ms)
-            except Exception as exc:
-                print(f"  FAILED clip {run_id}: {exc}", file=sys.stderr)
-                failures += 1
-                continue
-            in_window = [
-                conf
-                for ts, conf in confidence_by_ts.items()
-                if window.start_ms <= ts <= window.end_ms
-            ]
-            samples.append(
-                build_sample(
-                    source_video_id=source_video_id,
-                    source_video_path=source_video_path,
-                    source_video_duration_ms=video["duration_ms"],
-                    clip_path=safe_relative_path(clip_path, REPO_ROOT),
-                    clip_type="event",
-                    candidate_rule=CANDIDATE_RULE,
-                    window=window,
-                    metadata={
-                        "selection_source": "person_detector",
-                        "detector": report.get("detector", "unknown"),
-                        "detector_max_confidence": max(in_window) if in_window else None,
-                        "detector_hits_in_window": len(in_window),
-                    },
-                )
+            result = mine_person_detection_video(
+                video_path=video_path,
+                detection_entry={
+                    **entry,
+                    "detector": report.get("detector", "unknown"),
+                    "settings": report.get("settings", {}),
+                },
+                output_dir=output_dir,
+                dataset_id=args.dataset_id,
+                merge_gap_ms=args.merge_gap_ms,
+                padding_ms=args.padding_ms,
+                max_clips_per_video=args.max_clips_per_video,
+                random_seed=args.random_seed,
+                project_root=REPO_ROOT,
             )
-
-        if not samples:
-            continue
-
-        manifest = {
-            "schema_version": "1.0.0",
-            "dataset_id": args.dataset_id,
-            "manifest_id": f"manifest-{source_video_id}-person",
-            "generated_at": utc_now(),
-            "generator_version": f"candidate-mining-poc-{__version__}",
-            "random_seed": args.random_seed,
-            "samples": samples,
-        }
-        errors = validate_candidate_manifest(manifest, file=str(output_dir))
-        if errors:
-            print(f"  FAILED validate {run_id}: {errors[0]['message']}", file=sys.stderr)
+        except Exception as exc:
+            print(f"  FAILED mine {run_id}: {exc}", file=sys.stderr)
             failures += 1
             continue
 
-        write_json(output_dir / "candidate-manifest.json", manifest)
         run_ids.append(run_id)
-        print(f"{run_id:26} {len(samples)} clip(s) quanh nguoi duoc detect")
+        print(
+            f"{run_id:26} {result['event_count']} event clip(s), "
+            f"{result['background_count']} background clip(s)"
+        )
 
     print(f"\n{len(run_ids)} run(s) ok, {failures} failed")
     for run_id in run_ids:

@@ -1,4 +1,6 @@
-PYTHON ?= python3
+# Python 3.11: the default yolov8 detector needs torch, which has no build for
+# 3.12+ on this Intel-macOS box. See ADR-007.
+PYTHON ?= python3.11
 VENV ?= .venv
 VENV_PYTHON := $(VENV)/bin/python
 VENV_PIP := $(VENV)/bin/pip
@@ -16,7 +18,7 @@ API_BASE ?= http://$(API_HOST):$(API_PORT)
 FRONTEND_PORT ?= 5173
 TRIAGE_INPUT ?= data/raw/catalog.json
 
-.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool app frontend-build fetch-videos mine-all fetch-person-model triage-person fetch-eval-videos eval-person validate-dataset coverage-report release
+.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool app frontend-build fetch-videos mine-all fetch-person-model triage-person fetch-eval-videos eval-person annotate-video validate-dataset coverage-report release
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -69,6 +71,9 @@ fetch-eval-videos:
 
 eval-person:
 	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/eval_person_detector.py
+
+annotate-video:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/annotate_video.py --input $(INPUT)
 
 validate-dataset:
 	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/validate_dataset.py --manifest $(MANIFEST) --annotations $(ANNOTATIONS)

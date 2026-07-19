@@ -40,3 +40,5 @@ data/eval/**/*.mp4
 
 # Triage sort output (symlinks/copies of videos)
 outputs/triage/
+
+outputs/annotated/

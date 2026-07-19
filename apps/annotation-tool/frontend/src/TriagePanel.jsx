@@ -1,4 +1,4 @@
-import { CheckCircle2, Film, Play, RefreshCw, RotateCw, Upload, Users, XCircle } from "lucide-react";
+import { CheckCircle2, FileJson, Film, Play, RefreshCw, RotateCw, Upload, Users, XCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 function encodePath(path) {
@@ -15,12 +15,12 @@ function formatMs(ms) {
   return `${minutes}:${seconds}`;
 }
 
-export default function TriagePanel({ apiBase }) {
+export default function TriagePanel({ apiBase, onManifestReady }) {
   const [inputs, setInputs] = useState([]);
   const [inputDir, setInputDir] = useState("data/raw");
   const [rawVideos, setRawVideos] = useState([]);
   const [checked, setChecked] = useState(() => new Set());
-  const [model, setModel] = useState("yolov4");
+  const [model, setModel] = useState("yolov8");
   const [intervalMs, setIntervalMs] = useState(2000);
   // 0.3, not 0.5: YOLOv4 scores distant CCTV figures at 0.35-0.69, so the
   // usual 0.5 silently drops them.
@@ -30,6 +30,10 @@ export default function TriagePanel({ apiBase }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [mining, setMining] = useState(false);
+  const [mineResult, setMineResult] = useState(null);
+  const [bboxing, setBboxing] = useState(false);
+  const [bboxResult, setBboxResult] = useState(null);
   const pollRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -111,6 +115,7 @@ export default function TriagePanel({ apiBase }) {
 
   const startRun = async (paths) => {
     setError("");
+    setMineResult(null);
     try {
       const response = await fetch(`${apiBase}/triage/run`, {
         method: "POST",
@@ -133,6 +138,71 @@ export default function TriagePanel({ apiBase }) {
       pollRef.current = setInterval(fetchStatus, 1000);
     } catch (exc) {
       setError(String(exc));
+    }
+  };
+
+  const mineCandidates = async () => {
+    const selectedKept = kept.filter((video) => checked.has(video.video_path));
+    const paths = (selectedKept.length ? selectedKept : kept).map((video) => video.video_path);
+    if (!paths.length) return;
+
+    setError("");
+    setMining(true);
+    try {
+      const response = await fetch(`${apiBase}/triage/mine`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videos: paths,
+          random_seed: 42,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setError(JSON.stringify(payload.detail || payload, null, 2));
+        return;
+      }
+      setMineResult(payload);
+      const firstManifest = payload.outputs?.[0]?.manifest_path;
+      if (firstManifest && onManifestReady) {
+        await onManifestReady(firstManifest);
+      }
+      if (payload.errors?.length) {
+        setError(payload.errors.join(" | "));
+      }
+    } catch (exc) {
+      setError(String(exc));
+    } finally {
+      setMining(false);
+    }
+  };
+
+  const renderBboxVideo = async () => {
+    if (!preview) return;
+    setError("");
+    setBboxing(true);
+    setBboxResult(null);
+    try {
+      const response = await fetch(`${apiBase}/triage/bbox`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: preview.path,
+          model,
+          sample_fps: 0.5,
+          min_confidence: Number(minConfidence),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setError(JSON.stringify(payload.detail || payload, null, 2));
+        return;
+      }
+      setBboxResult(payload.result);
+    } catch (exc) {
+      setError(String(exc));
+    } finally {
+      setBboxing(false);
     }
   };
 
@@ -177,6 +247,10 @@ export default function TriagePanel({ apiBase }) {
 
   const previewResult = preview ? resultFor(preview.path) : null;
 
+  useEffect(() => {
+    setBboxResult(null);
+  }, [preview?.path]);
+
   // Boxes are sampled, not continuous: show the nearest sampled frame's boxes
   // while the video plays within half a sample interval of it.
   const drawBoxes = useCallback(() => {
@@ -193,13 +267,14 @@ export default function TriagePanel({ apiBase }) {
 
     const nowMs = video.currentTime * 1000;
     const interval = report?.settings?.sample_interval_ms || 2000;
+    // Hold the most recent detection's boxes until the next sample, like the
+    // reference "held sample" overlay, so boxes stay on screen instead of
+    // flickering at each sampled instant. Clear if the gap is more than one
+    // interval (nobody was detected around now).
     let nearest = null;
-    let bestGap = interval;
     for (const hit of hits) {
-      const gap = Math.abs(hit.timestamp_ms - nowMs);
-      if (gap <= bestGap) {
-        bestGap = gap;
-        nearest = hit;
+      if (hit.timestamp_ms <= nowMs + interval / 2 && Math.abs(hit.timestamp_ms - nowMs) <= interval) {
+        if (!nearest || hit.timestamp_ms > nearest.timestamp_ms) nearest = hit;
       }
     }
     if (!nearest?.boxes?.length) return;
@@ -251,7 +326,8 @@ export default function TriagePanel({ apiBase }) {
         <label>
           Model detect
           <select value={model} onChange={(event) => setModel(event.target.value)}>
-            <option value="yolov4">YOLOv4 (608px) - chinh xac</option>
+            <option value="yolov8">YOLOv8 (640px) - giong video mau</option>
+            <option value="yolov4">YOLOv4 (832px) - chinh xac</option>
             <option value="mobilenet-ssd">MobileNet-SSD (300px) - nhanh</option>
           </select>
         </label>
@@ -315,10 +391,15 @@ export default function TriagePanel({ apiBase }) {
       </div>
 
       <p className={`model-note ${model === "mobilenet-ssd" ? "warn" : ""}`}>
-        {model === "yolov4" ? (
+        {model === "yolov8" ? (
           <>
-            <strong>YOLOv4</strong> - input 608x608, bat duoc nguoi o xa tren footage CCTV.
-            ~0.8s/frame. License darknet: public domain.
+            <strong>YOLOv8</strong> (Ultralytics, 1920px) - bat nguoi o xa tot nhat, giong het video
+            mau. ~2.5s/frame CPU. Chay bang torch trong venv Python 3.11. License AGPL-3.0.
+          </>
+        ) : model === "yolov4" ? (
+          <>
+            <strong>YOLOv4</strong> - input 832x832, NMS, bat duoc nguoi o xa tren footage CCTV.
+            ~3s/frame. License darknet: public domain.
           </>
         ) : (
           <>
@@ -453,6 +534,21 @@ export default function TriagePanel({ apiBase }) {
                   </div>
                 </div>
               )}
+              <div className="bbox-actions">
+                <button onClick={renderBboxVideo} disabled={bboxing}>
+                  <Film size={14} />
+                  {bboxing ? "Dang tao video bbox..." : "Tao video bbox MP4"}
+                </button>
+                {bboxResult && (
+                  <div className="bbox-output">
+                    <small>{bboxResult.output_path}</small>
+                    <video
+                      src={`${apiBase}/clips/${encodePath(bboxResult.output_path)}`}
+                      controls
+                    />
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <p className="triage-empty">Bam mot video ben trai de xem</p>
@@ -513,6 +609,26 @@ export default function TriagePanel({ apiBase }) {
             nhip {report.settings.sample_interval_ms}ms - conf &ge; {report.settings.min_confidence}{" "}
             - min {report.settings.min_hits} frame
           </small>
+          <button onClick={mineCandidates} disabled={running || mining || !kept.length}>
+            <FileJson size={15} />
+            {mining ? "Dang tao..." : "Tao manifest/clips"}
+          </button>
+        </div>
+      )}
+      {mineResult?.outputs?.length > 0 && (
+        <div className="triage-manifest-output">
+          {mineResult.outputs.map((output) => (
+            <button
+              key={output.manifest_path}
+              onClick={() => onManifestReady?.(output.manifest_path)}
+            >
+              <FileJson size={14} />
+              <span>{output.manifest_path}</span>
+              <small>
+                {output.event_count} event, {output.background_count} background
+              </small>
+            </button>
+          ))}
         </div>
       )}
     </section>

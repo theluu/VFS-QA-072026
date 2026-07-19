@@ -6,7 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "vsf-ai-camera-poc"
 version = "0.1.0"
 description = "Candidate mining and annotation POC for AI Camera test data preparation"
-requires-python = ">=3.11"
+# Capped at <3.12: the default yolov8 detector needs torch, and torch has no
+# build for this Intel-macOS box beyond Python 3.11. See ADR-007.
+requires-python = ">=3.11,<3.12"
 dependencies = [
   "fastapi>=0.110",
   "uvicorn[standard]>=0.27",
@@ -15,8 +17,16 @@ dependencies = [
   "python-dotenv>=1.0",
   "jsonschema>=4.22",
   "openai>=1.40",
-  # <5 is required: OpenCV 5 dropped the Caffe importer the detector relies on.
-  "opencv-python-headless>=4.10,<5"
+  # Full (not headless) opencv: ultralytics imports cv2.imshow at import time, which
+  # the headless build lacks. <5 is still required: OpenCV 5 dropped the Caffe
+  # importer the yolov4/mobilenet-ssd fallbacks rely on. (On a headless Linux
+  # deployment this needs libGL; fine on this dev box - see ADR-007.)
+  "opencv-python>=4.10,<5",
+  # torch (pulled by ultralytics) is the Intel-macOS 2.2.2 build, compiled against
+  # numpy 1.x; numpy 2 breaks its C-API. See ADR-007.
+  "numpy<2",
+  # Default person detector. AGPL-3.0, accepted for the POC (ADR-007). Pulls torch.
+  "ultralytics>=8.2"
 ]
 
 [project.optional-dependencies]

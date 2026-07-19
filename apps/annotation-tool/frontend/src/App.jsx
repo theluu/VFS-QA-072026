@@ -128,6 +128,14 @@ export default function App() {
     []
   );
 
+  const openGeneratedManifest = useCallback(
+    async (path) => {
+      await loadManifest(path);
+      setView("annotate");
+    },
+    [loadManifest]
+  );
+
   const resolveDefaultManifest = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/manifests`);
@@ -261,7 +269,7 @@ export default function App() {
         )}
       </header>
 
-      {view === "triage" && <TriagePanel apiBase={API_BASE} />}
+      {view === "triage" && <TriagePanel apiBase={API_BASE} onManifestReady={openGeneratedManifest} />}
 
       <section className="workspace" hidden={view !== "annotate"}>
         <aside className="queue-panel">

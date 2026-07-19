@@ -30,10 +30,17 @@ so QA-Vin's annotation output matches the sample's detection quality.
   on this machine is acceptable).
 - **yolov8 becomes the default model** in the annotate CLI/pipeline; `yolov4` and
   `mobilenet-ssd` remain selectable.
-- **cv2 conflict resolution:** keep `opencv-python-headless<5` as the installed
-  `cv2` provider; do not let Ultralytics pull in `opencv-python`. Verify `cv2`
-  still imports after install.
-- **imgsz = 640** (matches the reference; already catches the tiny figures).
+- **cv2 conflict resolution:** ~~keep headless~~ **superseded during
+  implementation** — ultralytics calls `cv2.imshow` at import time, which the
+  headless build lacks, so the project must use the full `opencv-python<5` (still
+  has the Caffe importer the fallbacks need). See ADR-007.
+- **imgsz = 640** ~~(matches the reference)~~ **corrected to 1920 during
+  implementation.** Measured on VIRAT: 640 finds **0** people, 1920 finds them at
+  ~0.4-0.7 confidence, matching the sample. 640 was a wrong assumption about the
+  reference's settings. Cost: ~2.5s/frame on CPU.
+- **Runtime: Python 3.11.** torch has no build for this repo's Python 3.14 (nor
+  3.12+ on Intel macOS), so the project venv moves to 3.11. torch 2.2.2 (the last
+  Intel-mac build) needs `numpy<2`.
 
 ## Non-goals
 
@@ -82,7 +89,7 @@ Behavior:
   `detect_people` call.
 - `detect_people(frame, min_confidence)`:
   - `model.predict(frame, classes=[0], conf=min_confidence, iou=0.45,`
-    `imgsz=640, device="cpu", verbose=False)`
+    `imgsz=1920, device="cpu", verbose=False)`
   - For each result box: read pixel `xyxy`, normalize by the frame's actual
     width/height, build `PersonBox(x=x1/W, y=y1/H, w=(x2-x1)/W, h=(y2-y1)/H,`
     `confidence=conf)`, clamped to 0..1.
@@ -90,7 +97,7 @@ Behavior:
     separate `NMSBoxes` step is needed, unlike the YOLOv4 path.)
 
 Rationale for `class YoloV8Detector` constants: `COCO_PERSON_CLASS_ID = 0`
-(already defined in the module), IoU 0.45 and imgsz 640 mirror the reference
+(already defined in the module), IoU 0.45 mirror the reference; imgsz is 1920 (see above)
 `PersonYoloSettings`.
 
 ## Call-site changes (default flip)
@@ -161,6 +168,7 @@ record the reversal for this POC:
 ## Risks
 
 - **cv2 dependency clash** is the main integration risk (mitigation above).
-- **CPU inference speed:** yolov8m at imgsz 640, ~0.3-0.5s/frame; a 42s clip at
-  5-fps sampling is ~1-2 min. Acceptable for the POC.
+- **CPU inference speed:** yolov8m at imgsz 1920, ~2.5s/frame; a 42s clip at
+  5-fps sampling is ~9 min. Slow but acceptable for the POC; the UI's default
+  0.5-fps sampling renders in ~1 min.
 - torch install size / first-run environment setup friction.

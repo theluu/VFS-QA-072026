@@ -100,3 +100,63 @@ Consequences:
 
 - Khong can secret de chay POC.
 - Nguoi review van la nguon quyet dinh ground truth.
+
+## ADR-006 - Web triage to candidate mining boundary
+
+Status: Accepted
+
+Date: 2026-07-18
+
+Context:
+
+Nguoi dung can web local detect raw video nhu video VIRAT bbox mau va xuat output
+theo luong candidate-mining hien tai.
+
+Decision:
+
+FastAPI app duoc phep orchestrate person triage va goi module candidate-mining de
+sinh `outputs/runs/{run_id}/` gom inventory, clips, manifest, summary va log.
+Detector timestamp chi tao `candidate_rule=person_detected_v1`.
+FastAPI cung co the tao MP4 bbox burn-in duoi `outputs/annotated/` de reviewer
+doi chieu voi ket qua detector.
+
+Consequences:
+
+- Annotation tool van khong sua `sample_id` va khong tu gan ground truth.
+- Raw video khong bi ghi de; clips/proxy/report chi ghi duoi `outputs/`.
+- Web va script `mine_from_triage.py` dung chung logic tao candidate output.
+- Bbox MP4 la review artifact, khong thay the annotation export.
+
+## ADR-007 - Person detector: Ultralytics YOLOv8 default
+
+Status: Accepted
+
+Date: 2026-07-19
+
+Context:
+
+Bbox video cu (YOLOv4 qua OpenCV-DNN) bat nguoi o xa kem hon video mau. Video mau
+(tu repo VSF-Project) dung Ultralytics YOLOv8 nen bat duoc figure nho tren footage
+CCTV. Truoc day YOLOv8 bi tranh vi license AGPL-3.0.
+
+Decision:
+
+- `yolov8` (Ultralytics, weight mac dinh `yolov8m.pt`, imgsz 1920, iou 0.45) tro
+  thanh detector mac dinh cho annotate/bbox va triage. `yolov4` + `mobilenet-ssd`
+  van chon duoc. (imgsz 1920 chu khong phai 640: tren VIRAT, 640 bat 0 nguoi,
+  1920 bat duoc o ~0.4-0.7 confidence giong video mau. Doi lai ~2.5s/frame CPU.)
+- Chap nhan trade-off AGPL-3.0 cho POC.
+- YOLOv8 can torch, ma torch chua co ban cho Python 3.14 tren Intel macOS. Vi vay
+  venv du an chuyen sang **Python 3.11** (`make setup`); toan bo app/UI van chay
+  in-process tren env nay, UI khong doi.
+- `cv2` phai dung ban `opencv-python` day du (khong headless): ultralytics goi
+  `cv2.imshow` luc import, ban headless khong co. App khong thuc su goi imshow.
+- torch tren Intel-macOS chi co ban 2.2.2 (build voi numpy 1.x) nen ghim
+  `numpy<2`.
+
+Consequences:
+
+- `make setup` tao venv Python 3.11 (torch + ultralytics ~vai tram MB).
+- Detection cham hon tren CPU (~0.3-0.5s/frame) nhung recall tot hon han.
+- `YoloV8Detector` tra ve cung `PersonBox` chuan hoa 0..1 nen tracker, nhan,
+  encode, UI deu giu nguyen.

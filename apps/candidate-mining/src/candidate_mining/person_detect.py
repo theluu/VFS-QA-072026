@@ -21,7 +21,7 @@ INPUT_SIZE = (300, 300)
 MEAN_VALUE = 127.5
 SCALE_FACTOR = 1.0 / 127.5
 
-DEFAULT_MODEL = "yolov4"
+DEFAULT_MODEL = "yolov8"
 
 
 @dataclass
