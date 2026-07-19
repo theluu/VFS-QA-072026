@@ -34,7 +34,9 @@ export default function TriagePanel({ apiBase, onManifestReady }) {
   const [mineResult, setMineResult] = useState(null);
   const [bboxing, setBboxing] = useState(false);
   const [bboxResult, setBboxResult] = useState(null);
+  const [exportState, setExportState] = useState({ status: "idle" });
   const pollRef = useRef(null);
+  const exportPollRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileRef = useRef(null);
@@ -90,6 +92,7 @@ export default function TriagePanel({ apiBase, onManifestReady }) {
     fetchStatus();
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (exportPollRef.current) clearInterval(exportPollRef.current);
     };
   }, [apiBase, fetchStatus, loadVideos]);
 
@@ -206,6 +209,51 @@ export default function TriagePanel({ apiBase, onManifestReady }) {
     }
   };
 
+  const fetchExportStatus = useCallback(async () => {
+    try {
+      const response = await fetch(`${apiBase}/triage/suspicious/status`);
+      if (!response.ok) return;
+      const payload = await response.json();
+      setExportState(payload);
+      if (payload.status !== "running" && exportPollRef.current) {
+        clearInterval(exportPollRef.current);
+        exportPollRef.current = null;
+      }
+    } catch {
+      /* keep last state; poll retries */
+    }
+  }, [apiBase]);
+
+  // Cut a 60s clip (30s before/after the person appears) for every selected
+  // video that has a person, with YOLO boxes burned in, into outputs/suspicious/.
+  const exportSuspicious = async (paths) => {
+    if (!paths.length) return;
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/triage/suspicious`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videos: paths,
+          model,
+          sample_interval_ms: Number(intervalMs),
+          min_confidence: Number(minConfidence),
+          min_hits: Number(minHits),
+        }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        setError(detail.detail || "Cannot start export");
+        return;
+      }
+      setExportState({ status: "running", processed: 0, total: paths.length, clips: [], skipped: [] });
+      if (exportPollRef.current) clearInterval(exportPollRef.current);
+      exportPollRef.current = setInterval(fetchExportStatus, 1500);
+    } catch (exc) {
+      setError(String(exc));
+    }
+  };
+
   const uploadFiles = async (files) => {
     if (!files?.length) return;
     setError("");
@@ -233,6 +281,7 @@ export default function TriagePanel({ apiBase, onManifestReady }) {
 
   const report = state.report;
   const running = state.status === "running";
+  const exportRunning = exportState.status === "running";
   const kept = report?.videos?.filter((v) => v.decision === "keep") || [];
   const rejected = report?.videos?.filter((v) => v.decision === "rejected") || [];
   const percent = state.percent ?? 0;
@@ -326,7 +375,7 @@ export default function TriagePanel({ apiBase, onManifestReady }) {
         <label>
           Model detect
           <select value={model} onChange={(event) => setModel(event.target.value)}>
-            <option value="yolov8">YOLOv8 (640px) - giong video mau</option>
+            <option value="yolov8">YOLOv8 (1920px) - giong video mau</option>
             <option value="yolov4">YOLOv4 (832px) - chinh xac</option>
             <option value="mobilenet-ssd">MobileNet-SSD (300px) - nhanh</option>
           </select>
@@ -373,6 +422,18 @@ export default function TriagePanel({ apiBase, onManifestReady }) {
           Chay tat ca ({rawVideos.length})
         </button>
         <button
+          onClick={() =>
+            exportSuspicious(
+              (checked.size ? [...checked] : rawVideos.map((v) => v.path))
+            )
+          }
+          disabled={exportRunning || !rawVideos.length}
+          title="Cat clip 60s (30s truoc/sau khi nguoi xuat hien) + ve box YOLO, luu outputs/suspicious/"
+        >
+          <Film size={15} />
+          {exportRunning ? "Dang xuat clip..." : "Xuat clip kha nghi (bbox)"}
+        </button>
+        <button
           className="secondary"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
@@ -412,6 +473,42 @@ export default function TriagePanel({ apiBase, onManifestReady }) {
 
       {error && <p className="triage-error">{error}</p>}
       {state.status === "error" && <p className="triage-error">{state.error}</p>}
+      {exportState.status === "error" && (
+        <p className="triage-error">Xuat clip loi: {exportState.error}</p>
+      )}
+
+      {(exportRunning || exportState.clips?.length > 0 || exportState.skipped?.length > 0) && (
+        <div className="triage-progress">
+          <div className="progress-head">
+            <strong>
+              Clip kha nghi (60s, ±30s quanh luc nguoi xuat hien, co box YOLO)
+            </strong>
+            <span className="percent">{exportState.percent ?? 0}%</span>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${exportState.percent ?? 0}%` }} />
+          </div>
+          {exportRunning && (
+            <small>
+              Video {Math.min((exportState.processed ?? 0) + 1, exportState.total)}/
+              {exportState.total} - {exportState.current}
+            </small>
+          )}
+          {exportState.clips?.map((clip) => (
+            <div key={clip.output_path} className="bbox-output">
+              <small>
+                {clip.source_video} - nguoi xuat hien {formatMs(clip.person_appears_ms)} - clip{" "}
+                {formatMs(clip.clip_start_ms)}→{formatMs(clip.clip_end_ms)} (conf{" "}
+                {clip.max_confidence})
+              </small>
+              <video src={`${apiBase}/clips/${encodePath(clip.output_path)}`} controls />
+            </div>
+          ))}
+          {exportState.skipped?.length > 0 && (
+            <small>Bo qua (khong co nguoi): {exportState.skipped.join(", ")}</small>
+          )}
+        </div>
+      )}
 
       {running && (
         <div className="triage-progress">

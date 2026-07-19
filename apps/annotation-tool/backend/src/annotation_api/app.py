@@ -386,6 +386,110 @@ async def triage_bbox(request: Request) -> dict[str, Any]:
     return {"ok": True, "result": result}
 
 
+# --- Suspicious-clip export -------------------------------------------------
+# Same background-thread + poll pattern as /triage/run, but the product is a
+# folder (outputs/suspicious/) of 60s clips - one per video that has a person -
+# cut around the appearance and with the detector's boxes burned in as evidence.
+_suspicious_state: dict[str, Any] = {
+    "status": "idle",  # idle | running | done | error
+    "processed": 0,
+    "total": 0,
+    "current": "",
+    "error": "",
+    "clips": [],
+    "skipped": [],
+    "percent": 0,
+}
+
+
+def _set_suspicious(**fields: Any) -> None:
+    with _triage_lock:
+        _suspicious_state.update(fields)
+
+
+def _run_suspicious_export(video_paths: list[str], settings: dict[str, Any]) -> None:
+    try:
+        from candidate_mining.suspicious_clip import render_suspicious_bbox_clip
+
+        output_dir = REPO_ROOT / "outputs" / "suspicious"
+        total = len(video_paths)
+        clips: list[dict[str, Any]] = []
+        skipped: list[str] = []
+        _set_suspicious(status="running", processed=0, total=total, clips=[], skipped=[])
+
+        for index, path in enumerate(video_paths):
+            source = REPO_ROOT / path
+            _set_suspicious(current=source.name, processed=index)
+
+            def report_frames(done: int, frame_total: int, _index: int = index) -> None:
+                fraction = (done / frame_total) if frame_total else 0
+                _set_suspicious(percent=round((_index + fraction) / total * 100))
+
+            result = render_suspicious_bbox_clip(
+                input_path=source,
+                output_dir=output_dir,
+                models_root=REPO_ROOT / "models",
+                model=settings["model"],
+                min_confidence=settings["min_confidence"],
+                min_hits=settings["min_hits"],
+                sample_interval_ms=settings["sample_interval_ms"],
+                on_progress=report_frames,
+            )
+            if result is None:
+                skipped.append(path)
+            else:
+                result["output_path"] = str(Path(result["output_path"]).relative_to(REPO_ROOT))
+                clips.append(result)
+            _set_suspicious(clips=list(clips), skipped=list(skipped))
+
+        _set_suspicious(status="done", processed=total, current="", percent=100)
+    except Exception as exc:
+        _set_suspicious(status="error", error=str(exc), current="")
+
+
+@app.get("/triage/suspicious/status")
+def suspicious_status() -> dict[str, Any]:
+    with _triage_lock:
+        return dict(_suspicious_state)
+
+
+@app.post("/triage/suspicious")
+async def triage_suspicious(request: Request) -> dict[str, Any]:
+    with _triage_lock:
+        if _suspicious_state["status"] == "running":
+            raise HTTPException(status_code=409, detail="A suspicious export is already in progress")
+
+    payload = await request.json()
+    requested = payload.get("videos")
+    if not requested:
+        raise HTTPException(status_code=400, detail="No videos selected")
+
+    video_paths: list[str] = []
+    for path in requested:
+        try:
+            resolved = safe_repo_path(path)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if not resolved.is_file():
+            raise HTTPException(status_code=400, detail=f"Not a file: {path}")
+        video_paths.append(path)
+
+    settings = {
+        "model": payload.get("model", "yolov8"),
+        "min_confidence": float(payload.get("min_confidence", 0.3)),
+        "min_hits": int(payload.get("min_hits", 2)),
+        "sample_interval_ms": int(payload.get("sample_interval_ms", 2000)),
+    }
+    _set_suspicious(
+        status="running", processed=0, total=len(video_paths),
+        current="", error="", clips=[], skipped=[], percent=0,
+    )
+    threading.Thread(
+        target=_run_suspicious_export, args=(video_paths, settings), daemon=True
+    ).start()
+    return {"started": True, "count": len(video_paths), "settings": settings}
+
+
 ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi"}
 
 

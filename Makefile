@@ -18,7 +18,7 @@ API_BASE ?= http://$(API_HOST):$(API_PORT)
 FRONTEND_PORT ?= 5173
 TRIAGE_INPUT ?= data/raw/catalog.json
 
-.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool app frontend-build fetch-videos mine-all fetch-person-model triage-person fetch-eval-videos eval-person annotate-video validate-dataset coverage-report release
+.PHONY: setup lint test validate-schemas validate-samples candidate-mining annotation-api annotation-tool app frontend-build fetch-videos mine-all fetch-person-model triage-person fetch-eval-videos eval-person annotate-video cut-suspicious validate-dataset coverage-report release
 
 setup:
 	$(PYTHON) -m venv $(VENV)
@@ -74,6 +74,9 @@ eval-person:
 
 annotate-video:
 	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/annotate_video.py --input $(INPUT)
+
+cut-suspicious:
+	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/cut_suspicious_clip.py --input $(INPUT)
 
 validate-dataset:
 	PYTHONPATH=$(PYTHONPATH) $(TEST_PYTHON) scripts/validate_dataset.py --manifest $(MANIFEST) --annotations $(ANNOTATIONS)

@@ -160,3 +160,33 @@ Consequences:
 - Detection cham hon tren CPU (~0.3-0.5s/frame) nhung recall tot hon han.
 - `YoloV8Detector` tra ve cung `PersonBox` chuan hoa 0..1 nen tracker, nhan,
   encode, UI deu giu nguyen.
+
+## ADR-008 - Suspicious 60s clip export (with bbox evidence)
+
+Status: Accepted
+
+Date: 2026-07-19
+
+Context:
+
+Reviewer can 1 folder cac video CO NGUOI, moi video cat 1 doan 1 phut "kha nghi
+nhat" kem bang chung (box YOLO ve san tren video).
+
+Decision:
+
+- `suspicious_clip.py`: gom hit thanh episode (gap > 3s), chon episode
+  confidence cao nhat, moc = luc nguoi xuat hien dau tien trong episode do. Clip
+  = [moc-30s, moc+30s] = 60s (tu dich de du 60s khi sat dau/cuoi; video <60s lay
+  tron). `min_hits=2` de bo video chi co 1 hit nhieu (false positive).
+- `render_suspicious_bbox_clip`: 2 luot - quet ca video (thua) tim moc, roi chi
+  render box cho 60s do (day) -> clip co bang chung. Luu `outputs/suspicious/`.
+- Chay duoc qua CLI (`make cut-suspicious INPUT=...`) va UI (nut "Xuat clip kha
+  nghi (bbox)") - dung chung ham loi. UI chay nen + poll `/triage/suspicious/status`
+  giong `/triage/run`.
+
+Consequences:
+
+- 2 nut cu KHAC nhau: "Chay ... da chon" = phan loai co/khong nguoi (khong xuat
+  video); "Tao video bbox MP4" = ve box toan bo 1 video. Nut moi = cat 60s kha
+  nghi + box, batch, xuat folder.
+- Detector la yolov8 (imgsz 1920) nen ~2.5s/frame CPU; export batch cham.
